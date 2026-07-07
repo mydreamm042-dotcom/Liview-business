@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Participant, Reaction } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueBranding } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
 
@@ -19,6 +19,8 @@ export interface RoomState {
   heartCounts: Record<string, number>    // receiver_id → count
   totalReactions: number                 // hot 제외 전체 리액션 수 (서버 집계 기준)
   isHost: boolean
+  // BUSINESS 방이면 매장 브랜딩, PERSONAL 방이면 null. 서버가 GET /api/rooms/[code]에서 내려준다.
+  venue: VenueBranding | null
   initialLoaded: boolean
 }
 
@@ -38,6 +40,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
     heartCounts: {},
     totalReactions: 0,
     isHost: false,
+    venue: null,
     initialLoaded: false,
   })
   const supabase = createClient()
@@ -89,6 +92,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       heartCounts,
       totalReactions: reactions.filter(r => r.type !== 'hot').length,
       isHost: pData.isHost ?? false,
+      venue: pData.venue ?? null,
       initialLoaded: true,
     }))
   }, [roomId, roomCode])

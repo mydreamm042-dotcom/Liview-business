@@ -9,6 +9,7 @@ import InteractionModal from '@/components/InteractionModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
 import QRCodeDisplay from '@/components/QRCodeDisplay'
 import ChatPanel from '@/components/ChatPanel'
+import BrandHeader from '@/components/BrandHeader'
 import { simulateHotTaps, hotIndexAt, HOT_HOLD_MS, HOT_TOTAL_MS } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS } from '@/lib/cooldown'
 
@@ -138,7 +139,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   }, [state.reactions, state.initialLoaded])
 
   const handleEndRoom = async () => {
-    if (!confirm('방을 종료할까요?')) return
+    if (!confirm(state.venue ? '오늘 영업을 마감할까요? (방 기록은 보존됩니다)' : '방을 종료할까요?')) return
     setEndingRoom(true)
     await fetch(`/api/rooms/${code}`, {
       method: 'PATCH',
@@ -232,6 +233,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     <main className="flex flex-col min-h-dvh" style={{ paddingBottom: 100 }}>
 
       <div style={{ padding: '52px 20px 16px', background: 'linear-gradient(180deg,rgba(255,107,107,0.06) 0%,transparent 100%)' }}>
+        {/* BUSINESS 방이면 매장 브랜딩을 방 이름 위에 먼저 노출 (PERSONAL 방은 venue=null이라 미표시).
+            운영자(호스트)에게는 매장 설정 진입 버튼을 함께 노출한다. */}
+        {state.venue && (
+          <BrandHeader
+            venue={state.venue}
+            isOperator={state.isHost}
+            onSettings={() => router.push(`/operator/settings/${state.venue!.id}`)}
+          />
+        )}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -261,7 +271,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             {state.isHost ? (
               <button onClick={handleEndRoom} disabled={endingRoom}
                 style={{ height: 40, padding: '0 16px', borderRadius: 12, background: 'rgba(255,107,107,0.15)', border: '1.5px solid rgba(255,107,107,0.4)', color: 'var(--accent)', fontSize: 13, fontWeight: 800, cursor: endingRoom ? 'default' : 'pointer', opacity: endingRoom ? 0.6 : 1 }}>
-                {endingRoom ? '종료 중…' : '방 종료'}
+                {endingRoom ? (state.venue ? '마감 중…' : '종료 중…') : (state.venue ? '영업 마감' : '방 종료')}
               </button>
             ) : (
               <button onClick={handleLeave}
