@@ -1,4 +1,7 @@
-export type RoomStatus = 'active' | 'ended'
+// 'closed'는 BUSINESS 방 전용 마감 상태. ended와 달리 cleanup 삭제 대상이 아니며
+// 매장(venue) 이력으로 영구 보존된다. PERSONAL 방은 기존처럼 active → ended만 오간다.
+export type RoomStatus = 'active' | 'ended' | 'closed'
+export type RoomType = 'PERSONAL' | 'BUSINESS'
 export type ReactionType = 'heart' | 'warning' | 'star' | 'hot'
 
 export interface Room {
@@ -6,9 +9,41 @@ export interface Room {
   code: string
   name: string
   status: RoomStatus
+  room_type: RoomType
+  venue_id?: string | null
   created_at: string
   ended_at?: string | null
 }
+
+export type VenueCategory = 'bar' | 'pub' | 'pocha' | 'wine_bar' | 'cafe' | 'event_hall' | 'etc'
+
+// 매장 마스터. 방(세션)이 여러 번 열려도 유지되는 브랜딩/위치/설정의 소유자.
+// operator_owner_token은 절대 클라이언트 응답에 포함하지 않는다 (host_session과 동일 원칙).
+export interface Venue {
+  id: string
+  name: string
+  category: VenueCategory | null
+  address: string | null
+  latitude: number | null
+  longitude: number | null
+  logo_url: string | null
+  hero_image_url: string | null
+  primary_color: string | null
+  secondary_color: string | null
+  naver_review_url: string | null
+  google_review_url: string | null
+  kakao_review_url: string | null
+  public_chat_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+// 참여자 화면에 내려도 되는 매장 브랜딩 필드만 추린 것 (리뷰 URL 포함 — 리뷰 유도 화면에서 사용)
+export type VenueBranding = Pick<
+  Venue,
+  'id' | 'name' | 'category' | 'logo_url' | 'hero_image_url' | 'primary_color' | 'secondary_color'
+  | 'naver_review_url' | 'google_review_url' | 'kakao_review_url'
+>
 
 export interface Participant {
   id: string

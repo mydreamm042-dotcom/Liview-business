@@ -32,7 +32,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   void host_session
   const isHost = session_token != null && room.host_session === session_token
 
-  return NextResponse.json({ room: safeRoom, participants, isHost })
+  // BUSINESS 방이면 매장 브랜딩을 함께 내려준다 (매장명/로고/컬러/리뷰 URL).
+  // 참여자 화면이 방 이름보다 매장 브랜딩을 우선 노출하는 데 쓴다. PERSONAL 방은 null.
+  let venue = null
+  if (room.room_type === 'BUSINESS' && room.venue_id) {
+    const { data: venueData } = await supabase
+      .from('venues')
+      .select(
+        'id, name, category, logo_url, hero_image_url, primary_color, secondary_color, ' +
+        'naver_review_url, google_review_url, kakao_review_url'
+      )
+      .eq('id', room.venue_id)
+      .maybeSingle()
+    venue = venueData
+  }
+
+  return NextResponse.json({ room: safeRoom, participants, isHost, venue })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
@@ -54,8 +69,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     return NextResponse.json({ error: '호스트만 방을 종료할 수 있습니다' }, { status: 403 })
   }
 
-  const updatePayload: Record<string, unknown> = { status }
-  if (status === 'ended') {
+  // BUSINESS 방은 "종료(ended)"가 아니라 "마감(closed)"으로 전이한다. closed 방은
+  // cleanup 삭제 대상이 아니어서 매장 이력으로 영구 보존된다 (BUSINESS_RULES 2.1).
+  // 기존 UI가 보내는 status='ended'를 서버가 매핑하므로 클라이언트 수정 없이도 규칙이 지켜진다.
+  const resolvedStatus = room.room_type === 'BUSINESS' && status === 'ended' ? 'closed' : status
+
+  const updatePayload: Record<string, unknown> = { status: resolvedStatus }
+  if (resolvedStatus === 'ended' || resolvedStatus === 'closed') {
     updatePayload.ended_at = new Date().toISOString()
   }
 

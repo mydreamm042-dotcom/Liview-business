@@ -283,7 +283,9 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
         (payload) => {
-          if ((payload.new as { status: string }).status === 'ended') {
+          // ended = PERSONAL 종료, closed = BUSINESS 마감. 둘 다 참여자를 결과 화면으로 보낸다.
+          const newStatus = (payload.new as { status: string }).status
+          if (newStatus === 'ended' || newStatus === 'closed') {
             onRoomEndedRef.current?.()
           }
         }
