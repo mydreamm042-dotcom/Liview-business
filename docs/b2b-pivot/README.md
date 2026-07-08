@@ -10,6 +10,12 @@ This directory contains the complete design documentation for the **MySTAR B2B P
 
 ## 📁 Document Structure
 
+### 0. **ROADMAP_V2.md** 🆕 ⭐ Phase 순서는 이 문서가 최신 기준
+지도 기반 홈 화면(Discovery 승격) 반영한 재정렬 로드맵. Phase 순서가 궁금하면 이 문서를 먼저 본다.
+
+### 0-1. **CHANGE_INTAKE_PROCESS.md** 🆕
+진행 중 새 아이디어가 생길 때마다 반복할 절차 (도메인 매핑 → 로드맵 영향분석 → 승인 → 구현).
+
 ### 1. **B2B_PIVOT_SUMMARY.md** ⭐ START HERE
 **Executive Summary (15 sections)**
 - Project overview and vision
