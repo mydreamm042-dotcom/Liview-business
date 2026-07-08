@@ -1,65 +1,95 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useKakaoMapSdk, useGeolocation } from '@/hooks/useKakaoMap'
+import { DiscoverVenue } from '@/lib/supabase/types'
+
+// 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
+const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
 
 export default function Home() {
   const router = useRouter()
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const { status: sdkStatus } = useKakaoMapSdk()
+  const { position, status: geoStatus } = useGeolocation()
+  const [venues, setVenues] = useState<DiscoverVenue[]>([])
+
+  const center = position ?? (geoStatus !== 'loading' ? FALLBACK_CENTER : null)
+
+  // 실시간 HOT 매장 목록을 가져와 지도 위 마커로 표시한다.
+  // Discovery 무결성 규칙(BUSINESS_RULES.md §2.6): 이 응답에는 방 코드/QR이 없으므로
+  // 지도에서도 노출할 수 없다 — 마커 클릭은 상세 탐색 화면(/discover)으로만 이동시킨다.
+  useEffect(() => {
+    if (!center) return
+    fetch(`/api/discover/venues?lat=${center.lat}&lng=${center.lng}&radius_km=10`)
+      .then(res => res.json())
+      .then(data => setVenues(data.venues ?? []))
+      .catch(() => setVenues([]))
+  }, [center])
+
+  useEffect(() => {
+    if (sdkStatus !== 'ready' || !center || !mapContainerRef.current) return
+
+    const kakao = window.kakao
+    const map = new kakao.maps.Map(mapContainerRef.current, {
+      center: new kakao.maps.LatLng(center.lat, center.lng),
+      level: 5,
+    })
+
+    venues.forEach(v => {
+      const marker = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(v.latitude, v.longitude),
+        map,
+      })
+      kakao.maps.event.addListener(marker, 'click', () => {
+        router.push(`/discover?venue=${v.id}`)
+      })
+    })
+  }, [sdkStatus, center, venues, router])
 
   return (
-    <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: '80px', paddingBottom: '40px' }}>
-      {/* 헤더 */}
-      <div className="animate-fade-in" style={{ marginBottom: '60px', textAlign: 'center' }}>
-        <div style={{
-          width: 72, height: 72,
-          borderRadius: 22,
-          background: 'linear-gradient(135deg, #ff6b6b, #ee4444)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 36,
-          marginBottom: 24,
-          boxShadow: '0 12px 32px rgba(255,107,107,0.4)',
-          margin: '0 auto 24px',
-        }}>👁️</div>
-        <h1 style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.15, marginBottom: 10, letterSpacing: '-0.5px' }}>
-          noonchi - demo
-        </h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 15, lineHeight: 1.6 }}>
-          모임에서 익명으로<br />마음을 표현해요 ✨
-        </p>
+    <main className="flex flex-col min-h-dvh" style={{ position: 'relative' }}>
+      {/* 지도 영역 */}
+      <div style={{ flex: 1, position: 'relative', background: 'var(--card2)' }}>
+        {sdkStatus === 'error' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: 'var(--muted2)' }}>지도를 불러올 수 없습니다</p>
+            <p style={{ fontSize: 12, color: 'var(--muted)' }}>잠시 후 다시 시도해주세요</p>
+          </div>
+        )}
+        {geoStatus === 'denied' && (
+          <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px' }}>
+            <p style={{ fontSize: 12, color: 'var(--muted2)' }}>위치 권한이 없어 서울 중심으로 표시됩니다</p>
+          </div>
+        )}
+        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
       </div>
 
-      {/* 기능 소개 */}
-      <div className="animate-fade-in" style={{ marginBottom: 40, animationDelay: '0.1s', opacity: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {[
-            { emoji: '💖', label: '익명 하트', desc: '호감을 몰래 전달' },
-            { emoji: '⭐', label: '분위기 별점', desc: '지금 이 자리 몇 점?' },
-            { emoji: '🤫', label: '자제 시그널', desc: '살짝 과할 때 신호' },
-            { emoji: '📊', label: '결과 리포트', desc: '오늘의 하이라이트' },
-          ].map(f => (
-            <div key={f.label} className="card-sm" style={{ padding: '16px 14px' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{f.emoji}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{f.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted2)' }}>{f.desc}</div>
-            </div>
-          ))}
+      {/* 하단 액션 바 */}
+      <div style={{
+        padding: '20px 20px 32px',
+        background: 'var(--bg)',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 4 }}>
+          <p style={{ fontSize: 20, fontWeight: 800 }}>👁️ Liview</p>
         </div>
-      </div>
-
-      {/* 버튼 */}
-      <div className="animate-slide-up" style={{ animationDelay: '0.2s', opacity: 0 }}>
-        <button className="btn btn-primary" style={{ marginBottom: 12, fontSize: 17 }}
-          onClick={() => router.push('/create')}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <button className="btn btn-secondary" onClick={() => router.push('/join')}>
+            🔗 입장하기
+          </button>
+          <button className="btn btn-secondary" onClick={() => router.push('/discover')}>
+            🔥 실시간 핫한 가게
+          </button>
+        </div>
+        <button className="btn btn-primary" onClick={() => router.push('/create')}>
           🍻 방 만들기
         </button>
-        <button className="btn btn-secondary" style={{ fontSize: 17 }}
-          onClick={() => router.push('/join')}>
-          🔗 방 참여하기
-        </button>
       </div>
-
-      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: 24 }}>
-        앱 설치 없이 링크/QR로 참여 가능
-      </p>
     </main>
   )
 }

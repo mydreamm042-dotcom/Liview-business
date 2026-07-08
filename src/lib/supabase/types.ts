@@ -87,3 +87,19 @@ export interface Message {
   created_at: string
 }
 
+// get_live_hot_venues() RPC 응답 1건. 의도적으로 room_id/code를 포함하지 않는다 —
+// Discovery 화면은 방 코드/QR을 절대 노출하지 않는다 (BUSINESS_RULES.md §2.6).
+export interface DiscoverVenue {
+  id: string
+  name: string
+  category: VenueCategory | null
+  logo_url: string | null
+  hero_image_url: string | null
+  latitude: number
+  longitude: number
+  public_chat_enabled: boolean
+  hot_score: number
+  satisfaction: number
+  distance_km: number
+}
+
