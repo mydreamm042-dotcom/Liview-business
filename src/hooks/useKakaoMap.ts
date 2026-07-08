@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react'
 
+interface KakaoMapInstance {
+  setCenter: (position: unknown) => void
+  relayout: () => void
+}
+
 declare global {
   interface Window {
     kakao: {
       maps: {
         load: (cb: () => void) => void
-        Map: new (container: HTMLElement, options: unknown) => unknown
+        Map: new (container: HTMLElement, options: unknown) => KakaoMapInstance
         LatLng: new (lat: number, lng: number) => unknown
         Marker: new (options: unknown) => { setMap: (map: unknown) => void }
         MarkerImage: new (src: string, size: unknown, options?: unknown) => unknown
         Size: new (w: number, h: number) => unknown
-        event: { addListener: (target: unknown, type: string, handler: () => void) => void }
+        event: {
+          addListener: (target: unknown, type: string, handler: () => void) => void
+          trigger: (target: unknown, type: string) => void
+        }
       }
     }
   }

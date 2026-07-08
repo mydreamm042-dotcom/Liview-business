@@ -37,6 +37,12 @@ export default function Home() {
       level: 5,
     })
 
+    // 카카오맵은 생성 시점에 컨테이너의 실제 픽셀 크기를 읽는데, flex 레이아웃에서
+    // 부모 높이가 min-height로만 결정되는 경우 그 크기를 0으로 읽어 지도가 비어
+    // 보이는 문제가 흔하다. relayout으로 강제로 다시 크기를 재보고 중심을 재설정한다.
+    kakao.maps.event.trigger(map, 'resize')
+    map.setCenter(new kakao.maps.LatLng(center.lat, center.lng))
+
     venues.forEach(v => {
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(v.latitude, v.longitude),
@@ -49,7 +55,7 @@ export default function Home() {
   }, [sdkStatus, center, venues, router])
 
   return (
-    <main className="flex flex-col min-h-dvh" style={{ position: 'relative' }}>
+    <main className="flex flex-col" style={{ height: '100dvh', position: 'relative' }}>
       {/* 지도 영역 */}
       <div style={{ flex: 1, position: 'relative', background: 'var(--card2)' }}>
         {sdkStatus === 'error' && (
