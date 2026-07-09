@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-interface KakaoMapInstance {
+export interface KakaoMapInstance {
   setCenter: (position: unknown) => void
   relayout: () => void
 }
