@@ -13,7 +13,7 @@ export default function Home() {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<KakaoMapInstance | null>(null)
   const { status: sdkStatus } = useKakaoMapSdk()
-  const { position, status: geoStatus } = useGeolocation()
+  const { position, status: geoStatus, locate } = useGeolocation()
   const [venues, setVenues] = useState<DiscoverVenue[]>([])
 
   const center = position ?? (geoStatus !== 'loading' ? FALLBACK_CENTER : null)
@@ -90,6 +90,34 @@ export default function Home() {
           </div>
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+
+        {/* 현재 위치로 이동 — 카카오맵 자체 UI처럼 지도 위에 떠 있는 버튼.
+            하단 액션 바에 가리지 않도록 그 위쪽에 배치한다 (액션 바 높이만큼 여백). */}
+        <button
+          onClick={locate}
+          disabled={geoStatus === 'loading'}
+          aria-label="현재 위치로 이동"
+          style={{
+            position: 'absolute',
+            right: 16,
+            bottom: 210,
+            zIndex: 20,
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 20,
+            cursor: 'pointer',
+            opacity: geoStatus === 'loading' ? 0.5 : 1,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          {geoStatus === 'loading' ? '⏳' : '🎯'}
+        </button>
       </div>
 
       {/* 하단 액션 바 — 지도 위에 겹쳐서 얹는다 */}

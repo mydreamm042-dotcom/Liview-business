@@ -80,9 +80,28 @@ export interface GeoPosition {
 }
 
 // 참여자 위치 권한 요청. 거부/실패 시에도 화면이 멈추지 않도록 상태를 명확히 구분한다.
+// locate()로 수동 재요청 가능 — "현재 위치로 이동" 버튼에서 사용한다 (처음에 거부했어도
+// 버튼을 누르면 브라우저가 다시 권한을 물어볼 수 있고, 이미 허용된 상태면 바로 갱신된다).
 export function useGeolocation() {
   const [position, setPosition] = useState<GeoPosition | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'denied' | 'unsupported'>('loading')
+
+  const locate = () => {
+    if (!('geolocation' in navigator)) {
+      setStatus('unsupported')
+      return
+    }
+    setStatus('loading')
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setStatus('ready')
+      },
+      () => setStatus('denied'),
+      // 버튼으로 직접 누른 요청은 정확도를 우선한다 (자동 최초 요청은 배터리 고려해 저정확도).
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    )
+  }
 
   useEffect(() => {
     if (!('geolocation' in navigator)) {
@@ -99,5 +118,5 @@ export function useGeolocation() {
     )
   }, [])
 
-  return { position, status }
+  return { position, status, locate }
 }
