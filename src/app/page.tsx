@@ -71,9 +71,13 @@ export default function Home() {
   }, [venues, router])
 
   return (
-    <main className="flex flex-col" style={{ height: '100dvh', position: 'relative' }}>
-      {/* 지도 영역 */}
-      <div style={{ flex: 1, position: 'relative', background: 'var(--card2)' }}>
+    // flex:1로 "남는 공간 채우기"를 계산하게 하면 브라우저/레이아웃에 따라 지도
+    // 컨테이너가 0 높이로 잡히는 문제가 반복적으로 발생했다. position:absolute로
+    // main 전체를 무조건 채우도록 바꿔 flex 계산 자체를 제거한다 — 버튼 바는 그 위에
+    // 겹쳐서 얹는다 (지도 앱들의 표준적인 오버레이 레이아웃 패턴).
+    <main style={{ height: '100dvh', position: 'relative', overflow: 'hidden' }}>
+      {/* 지도 영역 — main 전체를 절대 위치로 채운다 */}
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--card2)' }}>
         {sdkStatus === 'error' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center' }}>
             <p style={{ fontSize: 14, color: 'var(--muted2)' }}>지도를 불러올 수 없습니다</p>
@@ -88,8 +92,13 @@ export default function Home() {
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
       </div>
 
-      {/* 하단 액션 바 */}
+      {/* 하단 액션 바 — 지도 위에 겹쳐서 얹는다 */}
       <div style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 20,
         padding: '20px 20px 32px',
         background: 'var(--bg)',
         borderTop: '1px solid var(--border)',
