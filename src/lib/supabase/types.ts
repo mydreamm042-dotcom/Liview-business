@@ -34,15 +34,23 @@ export interface Venue {
   google_review_url: string | null
   kakao_review_url: string | null
   public_chat_enabled: boolean
+  // 고정 QR 입장 보호 장치 (BUSINESS_RULES.md §2.2) — join_password는 운영자 본인 조회에만
+  // 포함되고, 공개 조회/참여자 응답에는 절대 내려가지 않는다.
+  join_password_enabled: boolean
+  join_password: string | null
+  geofence_radius_m: number
   created_at: string
   updated_at: string
 }
 
-// 참여자 화면에 내려도 되는 매장 브랜딩 필드만 추린 것 (리뷰 URL 포함 — 리뷰 유도 화면에서 사용)
+// 참여자 화면에 내려도 되는 매장 브랜딩 필드만 추린 것 (리뷰 URL 포함 — 리뷰 유도 화면에서 사용).
+// latitude/longitude/geofence_radius_m은 브랜딩이 아니라 "입장 후 지속 위치 체크"(BUSINESS_RULES.md
+// §2.3)를 클라이언트가 스스로 판정하기 위한 값 — 이미 매장에 있는 참여자에게는 민감하지 않다.
 export type VenueBranding = Pick<
   Venue,
   'id' | 'name' | 'category' | 'logo_url' | 'hero_image_url' | 'primary_color' | 'secondary_color'
   | 'naver_review_url' | 'google_review_url' | 'kakao_review_url'
+  | 'latitude' | 'longitude' | 'geofence_radius_m'
 >
 
 export interface Participant {

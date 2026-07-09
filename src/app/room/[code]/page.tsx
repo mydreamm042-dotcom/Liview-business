@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
 import { useRoom } from '@/hooks/useRoom'
 import { useChat } from '@/hooks/useChat'
+import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
 import InteractionModal from '@/components/InteractionModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
 import QRCodeDisplay from '@/components/QRCodeDisplay'
@@ -172,6 +173,32 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     clearRoomData()
     router.replace('/')
   }
+
+  // 입장 후 지속 위치 체크로 반경을 벗어났을 때의 자동 나가기 (BUSINESS_RULES.md §2.3).
+  // handleLeave와 달리 확인창 없이 즉시 처리하고, 이미 처리된 뒤 중복 트리거되는 것을 막는다.
+  const autoLeftRef = useRef(false)
+  const handleAutoLeave = useCallback(async () => {
+    if (autoLeftRef.current) return
+    autoLeftRef.current = true
+    if (roomData) {
+      try {
+        await fetch('/api/participants', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participant_id: roomData.participantId, session_token: getSessionToken() }),
+        })
+      } catch {
+        // 자동 나가기는 사용자 확인 없이 진행되므로, 서버 처리가 실패해도 클라이언트는
+        // 그대로 방을 나간다 (실패해서 방에 머물게 하면 반경 밖에 있다는 사실과 모순됨).
+      }
+    }
+    clearRoomData()
+    alert('매장 위치를 벗어나 자동으로 퇴장되었습니다')
+    router.replace('/')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useGeofenceAutoLeave(state.venue?.latitude, state.venue?.longitude, state.venue?.geofence_radius_m, handleAutoLeave)
 
   const handleOpenChat = () => {
     setShowChat(true)

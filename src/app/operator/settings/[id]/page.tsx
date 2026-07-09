@@ -2,8 +2,16 @@
 
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
+import { QRCodeSVG } from 'qrcode.react'
 import { getSessionToken } from '@/lib/session'
 import { Venue, VenueCategory } from '@/lib/supabase/types'
+
+interface Session {
+  id: string
+  name: string
+  status: string
+  created_at: string
+}
 
 const CATEGORIES: { value: VenueCategory; label: string }[] = [
   { value: 'pocha', label: '포차' },
@@ -25,6 +33,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState('')
 
   // 편집 필드
   const [name, setName] = useState('')
@@ -36,6 +45,16 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [naverUrl, setNaverUrl] = useState('')
   const [googleUrl, setGoogleUrl] = useState('')
   const [kakaoUrl, setKakaoUrl] = useState('')
+
+  // 영업 시작/종료 (BUSINESS_RULES.md §2.1~2.2 — 고정 QR + 오늘 영업 시작/종료 모델)
+  const [session, setSession] = useState<Session | null>(null)
+  const [sessionLoaded, setSessionLoaded] = useState(false)
+  const [sessionBusy, setSessionBusy] = useState(false)
+  const [sessionError, setSessionError] = useState('')
+
+  // 입장 비밀번호 ON/OFF (고정 QR 도용 방지 장치, BUSINESS_RULES.md §2.2)
+  const [passwordEnabled, setPasswordEnabled] = useState(false)
+  const [password, setPassword] = useState('')
 
   useEffect(() => {
     const token = getSessionToken()
@@ -57,12 +76,60 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         setNaverUrl(v.naver_review_url ?? '')
         setGoogleUrl(v.google_review_url ?? '')
         setKakaoUrl(v.kakao_review_url ?? '')
+        setPasswordEnabled(v.join_password_enabled ?? false)
+        setPassword(v.join_password ?? '')
       })
       .catch(() => setLoadError('매장 정보를 불러오지 못했습니다'))
+
+    fetch(`/api/venues/${id}/session?operator_token=${encodeURIComponent(token)}`)
+      .then(res => res.json())
+      .then(data => setSession(data.session ?? null))
+      .catch(() => {})
+      .finally(() => setSessionLoaded(true))
   }, [id])
+
+  const handleStartSession = async () => {
+    setSessionBusy(true); setSessionError('')
+    try {
+      const res = await fetch(`/api/venues/${id}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_token: getSessionToken() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSession(data.session)
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : '영업 시작에 실패했습니다')
+    } finally {
+      setSessionBusy(false)
+    }
+  }
+
+  const handleEndSession = async () => {
+    if (!confirm('오늘 영업을 마감할까요? (방 기록은 보존됩니다)')) return
+    setSessionBusy(true); setSessionError('')
+    try {
+      const res = await fetch(`/api/venues/${id}/session?operator_token=${encodeURIComponent(getSessionToken())}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSession(null)
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : '영업 종료에 실패했습니다')
+    } finally {
+      setSessionBusy(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!name.trim()) return
+    setSaveError('')
+    if (passwordEnabled && !password.trim()) {
+      setSaveError('입장 비밀번호를 켰다면 비밀번호를 입력해주세요')
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch(`/api/venues/${id}`, {
@@ -79,13 +146,15 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           naver_review_url: naverUrl.trim() || null,
           google_review_url: googleUrl.trim() || null,
           kakao_review_url: kakaoUrl.trim() || null,
+          join_password_enabled: passwordEnabled,
+          join_password: passwordEnabled ? password.trim() : null,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setSavedAt(Date.now())
-    } catch {
-      setLoadError('저장에 실패했습니다')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '저장에 실패했습니다')
     } finally {
       setSaving(false)
     }
@@ -106,6 +175,9 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
 
   const label = { fontSize: 12, fontWeight: 700 as const, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }
   const section = { marginBottom: 24 }
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const venueJoinUrl = `${appUrl}/v/${id}`
+  const isOpen = session?.status === 'active'
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 120 }}>
@@ -138,6 +210,69 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>손님에게 이렇게 보여요</p>
         </div>
       </div>
+
+      {/* 영업 시작/종료 — 방을 매번 새로 만들지 않고, 등록된 매장에서 오늘 세션만 여닫는다 */}
+      <div className="card" style={{ padding: 18, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <p style={{ fontSize: 14, fontWeight: 800 }}>영업 상태</p>
+          <span style={{
+            fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+            background: isOpen ? 'rgba(16,185,129,0.15)' : 'var(--card2)',
+            color: isOpen ? '#10b981' : 'var(--muted2)',
+          }}>
+            {!sessionLoaded ? '확인 중...' : isOpen ? '영업 중' : '영업 전'}
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 14 }}>
+          {isOpen ? `${session?.name} · 손님이 QR로 바로 입장할 수 있어요` : '오늘 영업을 시작하면 QR로 손님이 입장할 수 있어요'}
+        </p>
+        {sessionError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>{sessionError}</p>}
+        <button
+          className={isOpen ? 'btn btn-secondary' : 'btn btn-primary'}
+          onClick={isOpen ? handleEndSession : handleStartSession}
+          disabled={!sessionLoaded || sessionBusy}
+          style={{ opacity: !sessionLoaded || sessionBusy ? 0.5 : 1, fontSize: 15 }}>
+          {sessionBusy ? '처리 중...' : isOpen ? '오늘 영업 종료' : '오늘 영업 시작'}
+        </button>
+      </div>
+
+      {/* 고정 QR — 한 번 등록하면 바뀌지 않음. 방 코드는 별도로 노출하지 않는다
+          (BUSINESS_RULES.md §2.2, Discovery 도메인과 동일하게 코드/QR 절대 미표시 원칙) */}
+      <div className="card" style={{ padding: 18, marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4, alignSelf: 'flex-start' }}>매장 고정 QR</p>
+        <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 16, alignSelf: 'flex-start' }}>출력해서 매장에 붙여두세요. 이 QR은 바뀌지 않아요</p>
+        <div style={{ padding: 16, borderRadius: 20, background: '#fff', marginBottom: 12 }}>
+          <QRCodeSVG value={venueJoinUrl} size={160} />
+        </div>
+        <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(venueJoinUrl)} style={{ fontSize: 14 }}>
+          🔗 링크 복사하기
+        </button>
+      </div>
+
+      {/* 입장 비밀번호 — 고정 QR이 촬영/유출돼도 매장 밖에서 남용하기 어렵게 하는 장치 */}
+      <div className="card" style={{ padding: 18, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <p style={{ fontSize: 14, fontWeight: 800 }}>입장 비밀번호</p>
+          <button onClick={() => setPasswordEnabled(v => !v)}
+            style={{
+              width: 44, height: 26, borderRadius: 999, cursor: 'pointer', position: 'relative', flexShrink: 0,
+              background: passwordEnabled ? 'var(--accent)' : 'var(--card2)', border: '1px solid var(--border)',
+            }}>
+            <span style={{
+              position: 'absolute', top: 2, left: passwordEnabled ? 20 : 2, width: 20, height: 20, borderRadius: '50%',
+              background: '#fff', transition: 'left 0.15s',
+            }} />
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: passwordEnabled ? 14 : 0 }}>
+          켜두면 매일 원하는 비밀번호로 바꿔서 QR 도용을 막을 수 있어요 (한글/영문/특수문자 모두 가능)
+        </p>
+        {passwordEnabled && (
+          <input className="input" value={password} onChange={e => setPassword(e.target.value)} maxLength={30} placeholder="오늘의 입장 비밀번호" />
+        )}
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)', margin: '0 0 24px' }} />
 
       <div style={section}>
         <label style={label}>매장 이름</label>
@@ -209,6 +344,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
+        {saveError && <p style={{ fontSize: 12, color: '#ff6b6b', textAlign: 'center', marginBottom: 8 }}>{saveError}</p>}
         {savedAt && <p style={{ fontSize: 12, color: '#10b981', textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</p>}
         <button className="btn btn-primary" onClick={handleSave} disabled={saving || !name.trim()}
           style={{ fontSize: 16, opacity: saving || !name.trim() ? 0.5 : 1 }}>

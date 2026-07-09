@@ -14,6 +14,7 @@ const UPDATABLE_FIELDS = [
   'logo_url', 'hero_image_url', 'primary_color', 'secondary_color',
   'naver_review_url', 'google_review_url', 'kakao_review_url',
   'public_chat_enabled',
+  'join_password_enabled', 'join_password', 'geofence_radius_m',
 ] as const
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

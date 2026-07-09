@@ -40,7 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       .from('venues')
       .select(
         'id, name, category, logo_url, hero_image_url, primary_color, secondary_color, ' +
-        'naver_review_url, google_review_url, kakao_review_url'
+        'naver_review_url, google_review_url, kakao_review_url, latitude, longitude, geofence_radius_m'
       )
       .eq('id', room.venue_id)
       .maybeSingle()
