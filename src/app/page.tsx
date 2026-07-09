@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useKakaoMapSdk, useGeolocation, KakaoMapInstance } from '@/hooks/useKakaoMap'
 import { DiscoverVenue } from '@/lib/supabase/types'
+import VenueBottomSheet from '@/components/VenueBottomSheet'
 
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
@@ -15,19 +16,28 @@ export default function Home() {
   const { status: sdkStatus } = useKakaoMapSdk()
   const { position, status: geoStatus, locate } = useGeolocation()
   const [venues, setVenues] = useState<DiscoverVenue[]>([])
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
 
   const center = position ?? (geoStatus !== 'loading' ? FALLBACK_CENTER : null)
 
-  // 실시간 HOT 매장 목록을 가져와 지도 위 마커로 표시한다.
-  // Discovery 무결성 규칙(BUSINESS_RULES.md §2.6): 이 응답에는 방 코드/QR이 없으므로
-  // 지도에서도 노출할 수 없다 — 마커 클릭은 상세 탐색 화면(/discover)으로만 이동시킨다.
+  // 실시간 HOT 매장 목록을 가져와 지도 위 마커로 표시한다. 마커를 탭하면 페이지 이동 대신
+  // 지도 위 바텀시트로 상세를 보여준다 (BUSINESS_RULES.md §2.7 "지도 마커 상세").
+  // Discovery 무결성 규칙(§2.6)은 그대로 유지: 이 응답엔 방 코드/QR이 없고, 바텀시트의
+  // "입장하기"도 /v/[id]로 이동만 시킬 뿐 실제 검증은 그 화면이 그대로 담당한다.
   useEffect(() => {
     if (!center) return
-    fetch(`/api/discover/venues?lat=${center.lat}&lng=${center.lng}&radius_km=10`)
-      .then(res => res.json())
-      .then(data => setVenues(data.venues ?? []))
-      .catch(() => setVenues([]))
+    const fetchVenues = () => {
+      fetch(`/api/discover/venues?lat=${center.lat}&lng=${center.lng}&radius_km=10`)
+        .then(res => res.json())
+        .then(data => setVenues(data.venues ?? []))
+        .catch(() => setVenues([]))
+    }
+    fetchVenues()
+    const interval = setInterval(fetchVenues, 3000)
+    return () => clearInterval(interval)
   }, [center])
+
+  const selectedVenue = venues.find(v => v.id === selectedVenueId) ?? null
 
   // 지도 생성은 위치(geolocation) 확정 여부와 무관하게, SDK가 준비되는 즉시 실행한다.
   // 이전에는 center가 나올 때까지 지도 자체를 안 만들었는데, 위치 권한 처리가 늦어지거나
@@ -54,21 +64,24 @@ export default function Home() {
     mapRef.current.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng))
   }, [center])
 
-  // 매장 마커는 목록이 갱신될 때마다 다시 그린다.
+  // 매장 마커는 목록이 갱신될 때마다 다시 그린다. venues는 이제 3초마다 폴링되므로,
+  // 새로 그리기 전에 이전 마커를 반드시 지도에서 떼어내야 한다 (안 지우면 폴링마다 계속 쌓임).
   useEffect(() => {
     if (!mapRef.current) return
     const kakao = window.kakao
     const map = mapRef.current
-    venues.forEach(v => {
+    const markers = venues.map(v => {
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(v.latitude, v.longitude),
         map,
       })
       kakao.maps.event.addListener(marker, 'click', () => {
-        router.push(`/discover?venue=${v.id}`)
+        setSelectedVenueId(v.id)
       })
+      return marker
     })
-  }, [venues, router])
+    return () => { markers.forEach(m => m.setMap(null)) }
+  }, [venues])
 
   return (
     // flex:1로 "남는 공간 채우기"를 계산하게 하면 브라우저/레이아웃에 따라 지도
@@ -120,35 +133,39 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 하단 액션 바 — 지도 위에 겹쳐서 얹는다 */}
-      <div style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 20,
-        padding: '20px 20px 32px',
-        background: 'var(--bg)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 4 }}>
-          <p style={{ fontSize: 20, fontWeight: 800 }}>👁️ Liview</p>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={() => router.push('/join')}>
-            🔗 입장하기
+      {/* 매장 마커를 탭하면 하단 액션 바 대신 바텀시트를 보여준다 */}
+      {selectedVenue ? (
+        <VenueBottomSheet venue={selectedVenue} onClose={() => setSelectedVenueId(null)} />
+      ) : (
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 20,
+          padding: '20px 20px 32px',
+          background: 'var(--bg)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 4 }}>
+            <p style={{ fontSize: 20, fontWeight: 800 }}>👁️ Liview</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button className="btn btn-secondary" onClick={() => router.push('/join')}>
+              🔗 입장하기
+            </button>
+            <button className="btn btn-secondary" onClick={() => router.push('/discover')}>
+              🔥 실시간 핫한 가게
+            </button>
+          </div>
+          <button className="btn btn-primary" onClick={() => router.push('/create')}>
+            🍻 방 만들기
           </button>
-          <button className="btn btn-secondary" onClick={() => router.push('/discover')}>
-            🔥 실시간 핫한 가게
-          </button>
         </div>
-        <button className="btn btn-primary" onClick={() => router.push('/create')}>
-          🍻 방 만들기
-        </button>
-      </div>
+      )}
     </main>
   )
 }

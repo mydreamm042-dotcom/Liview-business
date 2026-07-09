@@ -106,6 +106,8 @@ export interface DiscoverVenue {
   latitude: number
   longitude: number
   public_chat_enabled: boolean
+  // 입장하기 버튼의 "반경 밖" UX 힌트에만 쓴다 — 실제 판정은 join 시점 서버 체크가 최종 근거
+  geofence_radius_m: number
   hot_score: number
   satisfaction: number
   distance_km: number
