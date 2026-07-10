@@ -64,6 +64,12 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) {
+    // 위의 occupant 체크는 동시 요청 사이의 틈을 못 막는 사전 확인일 뿐이고, 최종 방어는
+    // idx_participants_seat_unique(DB 유니크 인덱스)다 — 두 참여자가 거의 동시에 같은
+    // 좌석을 선택하면 하나는 여기서 23505로 걸린다.
+    if (error.code === '23505') {
+      return NextResponse.json({ error: '이미 다른 손님이 앉은 좌석입니다' }, { status: 409 })
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

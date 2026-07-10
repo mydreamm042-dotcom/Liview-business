@@ -31,6 +31,14 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS seat_assigned_at timestamptz;
 
 CREATE INDEX IF NOT EXISTS idx_participants_seat_id ON participants(seat_id);
 
+-- 좌석 중복 배정 방지를 애플리케이션의 "확인 후 갱신" 체크에만 맡기면 동시 요청 사이의
+-- 틈에서 두 참여자가 같은 좌석을 동시에 차지할 수 있다 (submit_cooldown_reaction이
+-- pg_advisory_xact_lock으로 막아준 것과 같은 종류의 레이스). 같은 방에서 나가지 않은
+-- 참여자 중 같은 좌석을 가진 행이 둘 이상 있을 수 없도록 DB가 최종적으로 보장한다.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_participants_seat_unique
+  ON participants(room_id, seat_id)
+  WHERE seat_id IS NOT NULL AND left_at IS NULL;
+
 -- 운영자가 특정 손님에게 보내는 경고 메시지 (Guest Care 도메인). reactions.warning(참여자
 -- 간 익명 자제 시그널)과는 별개 개념이라 별도 테이블로 둔다. 삭제되지 않는 감사 이력이며,
 -- acknowledged_at은 참여자가 확인 모달을 닫은 시각이다 (참여자 화면엔 확인 전까지 유지).

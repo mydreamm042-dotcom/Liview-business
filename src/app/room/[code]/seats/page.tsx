@@ -2,18 +2,10 @@
 
 import { useEffect, useState, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { getRoomData, getSessionToken } from '@/lib/session'
+import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
 import { Participant, VenueSeat, Reaction, VenueBranding } from '@/lib/supabase/types'
-import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
-
-function fmtElapsed(seatAssignedAt: string, now: number): string {
-  const sec = Math.max(0, Math.floor((now - new Date(seatAssignedAt).getTime()) / 1000))
-  const m = Math.floor(sec / 60)
-  const h = Math.floor(m / 60)
-  if (h > 0) return `${h}시간 ${m % 60}분째`
-  if (m > 0) return `${m}분째`
-  return '방금 앉음'
-}
+import { fmtSeatElapsed, isOccupantHot } from '@/lib/seatDisplay'
+import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
 
 // 참여자용 자리배치도 — BUSINESS 방은 좌석 선택이 필수다 (BUSINESS_RULES.md §2.8).
 // 매장에 등록된 좌석이 하나도 없으면(운영자 미설정) 게이트를 걸지 않고 방으로 바로 보낸다.
@@ -21,6 +13,11 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
   const { code } = use(params)
   const router = useRouter()
   const roomData = getRoomData()
+  // getRoomData()는 매 렌더마다 localStorage를 새로 JSON.parse해 매번 다른 객체 참조를
+  // 반환한다 — 이 화면의 1초 tick(now)과 겹치면 roomData 전체를 deps에 넣은 effect가
+  // 매초 정리/재실행된다. 그래서 아래 effect들은 원시값(participantId/roomId)만 쓴다.
+  const myParticipantId = roomData?.participantId
+  const myRoomId = roomData?.roomId
 
   const [seats, setSeats] = useState<VenueSeat[]>([])
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -43,10 +40,16 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
   const fetchState = useCallback(async () => {
     const [rRes, hRes] = await Promise.all([
       fetch(`/api/rooms/${code}?session_token=${encodeURIComponent(getSessionToken())}`),
-      roomData ? fetch(`/api/reactions?room_id=${roomData.roomId}&type=hot`) : Promise.resolve(null),
+      myRoomId ? fetch(`/api/reactions?room_id=${myRoomId}&type=hot`) : Promise.resolve(null),
     ])
     const rData = await rRes.json()
     if (rRes.ok) {
+      // 좌석을 고르는 동안 운영자가 영업을 종료하면(closed) 다른 참여자들과 마찬가지로
+      // 결과 화면으로 보낸다 — 그렇지 않으면 이 화면에 계속 갇힌다.
+      if (rData.room?.status === 'ended' || rData.room?.status === 'closed') {
+        router.replace(`/room/${code}/result`)
+        return
+      }
       setSeats(rData.seats ?? [])
       setParticipants((rData.participants ?? []).filter((p: Participant) => !p.left_at))
       setVenue(rData.venue ?? null)
@@ -56,7 +59,7 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
       setHotReactions(hData.reactions ?? [])
     }
     setLoaded(true)
-  }, [code, roomData])
+  }, [code, myRoomId, router])
 
   useEffect(() => {
     fetchState()
@@ -64,7 +67,28 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
     return () => clearInterval(interval)
   }, [fetchState])
 
-  const myParticipant = participants.find(p => p.id === roomData?.participantId)
+  // 좌석을 아직 안 고른 상태로 이 화면에 머무는 동안에도 위치 반경 제한은 계속 적용돼야
+  // 한다 (BUSINESS_RULES.md §2.3) — 방 화면에만 걸려있으면 이 화면에서는 빠져나가게 된다.
+  const handleGeofenceLeave = useCallback(async () => {
+    if (roomData) {
+      try {
+        await fetch('/api/participants', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participant_id: roomData.participantId, session_token: getSessionToken() }),
+        })
+      } catch {
+        // 위치 이탈로 인한 자동 퇴장은 사용자 확인 없이 진행되므로, 서버 처리 실패해도 나간다
+      }
+    }
+    clearRoomData()
+    alert('매장 위치를 벗어나 자동으로 퇴장되었습니다')
+    router.replace('/')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useGeofenceAutoLeave(venue?.latitude, venue?.longitude, venue?.geofence_radius_m, handleGeofenceLeave)
+
+  const myParticipant = participants.find(p => p.id === myParticipantId)
 
   useEffect(() => {
     if (!loaded) return
@@ -76,7 +100,7 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
   }, [loaded, seats, myParticipant, code, router])
 
   const handleSelect = async (seatId: string) => {
-    if (!roomData) return
+    if (!myParticipantId) return
     setSelectingSeatId(seatId)
     setError('')
     try {
@@ -84,7 +108,7 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          participant_id: roomData.participantId,
+          participant_id: myParticipantId,
           session_token: getSessionToken(),
           seat_id: seatId,
         }),
@@ -117,9 +141,7 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {seats.map(seat => {
           const occupant = participants.find(p => p.seat_id === seat.id)
-          const occupantHot = occupant
-            ? hotIndexAt(simulateHotTaps(hotReactions.filter(r => r.receiver_id === occupant.id)), now) > 0
-            : false
+          const occupantHot = occupant ? isOccupantHot(occupant.id, hotReactions, now) : false
           const isEmpty = !occupant
 
           return (
@@ -145,7 +167,7 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
                     {occupant!.nickname} {occupantHot && '🔥'}
                   </p>
                   {occupant!.seat_assigned_at && (
-                    <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtElapsed(occupant!.seat_assigned_at, now)}</p>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtSeatElapsed(occupant!.seat_assigned_at, now)}</p>
                   )}
                 </div>
               )}

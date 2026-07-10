@@ -25,8 +25,8 @@
 | **Review** (검증 리뷰) 🆕 | 참여자의 실제 세션 데이터를 근거로 한 "조작 불가능한 방문 인증 리뷰"의 생성·공개여부를 책임지는 도메인 | `venue_reviews` | Venue, Room, Participant, Reaction |
 | **Public Transparency** (공개 채팅) 🆕 | 매장이 opt-in한 경우에 한해, 방 채팅을 비참여자에게도 노출하는 규칙을 책임지는 도메인 | (Chat 도메인 데이터를 조건부로 재노출, 별도 테이블 없음) | Chat, Venue |
 | **Discovery** (탐색/주변추천) 🆕 | 참여자의 현재 위치를 기준으로, 실시간으로 분위기가 좋은 주변 매장을 찾아주는 도메인 | (Venue + Room + Reaction 기반 계산, 별도 테이블 없음) | Venue, Room, Reaction |
-| **Seating** (좌석/자리배치) 🆕 | 매장 내부의 물리적 좌석 배치를 운영자가 구성하고, 참여자가 입장 시 좌석을 선택하며, 운영자가 참여자의 좌석을 직접 옮길 수 있고(드래그/모바일 롱프레스), 좌석 단위로 실시간 HOT 활동과 착석 경과시간을 보여주는 도메인 | `venue_seat_layouts`(신설 예정), `participants.seat_id`+`seat_assigned_at`(신설 예정) | Venue, Room, Participant, Reaction |
-| **Guest Care** (손님 케어) 🆕 | 운영자가 자리배치도에서 특정 손님을 지목(우클릭/터치)해 개입하는 행위(경고 메시지, 쿠폰 지급 등)를 책임지는 확장형 도메인. Reaction 도메인의 `warning`(참여자 간 익명 자제 시그널)과는 별개 개념 — 혼동 방지를 위해 "운영자 경고 메시지(Operator Alert)"로 구분 명명 | `operator_alerts`(신설 예정), `venue_coupons`+`coupon_grants`(신설 예정) | Venue, Room, Participant, Seating |
+| **Seating** (좌석/자리배치) 🆕 | 매장 내부의 물리적 좌석 배치를 운영자가 구성하고, 참여자가 입장 시 좌석을 선택하며, 운영자가 참여자의 좌석을 직접 옮길 수 있고(드래그/모바일 롱프레스), 좌석 단위로 실시간 HOT 활동과 착석 경과시간을 보여주는 도메인 | `venue_seats`(구현 완료), `participants.seat_id`+`seat_assigned_at`(구현 완료) | Venue, Room, Participant, Reaction |
+| **Guest Care** (손님 케어) 🆕 | 운영자가 자리배치도에서 특정 손님을 지목(우클릭/터치)해 개입하는 행위를 책임지는 확장형 도메인. Reaction 도메인의 `warning`(참여자 간 익명 자제 시그널)과는 별개 개념 — 혼동 방지를 위해 "운영자 경고 메시지(Operator Alert)"로 구분 명명. 쿠폰 지급은 사양 미확정으로 Phase 4 범위 밖(별도 Phase로 연기) | `operator_alerts`(구현 완료), `venue_coupons`+`coupon_grants`(추후 별도 Phase에서 신설 예정) | Venue, Room, Participant, Seating |
 | **Operator Analytics** (운영 분석) 🆕 | 위 모든 도메인의 데이터를 읽기 전용으로 재가공해 대시보드/퍼널/리포트/이벤트 타임라인을 제공하는 도메인 (자체 상태를 쓰지 않음) | `operation_events` (기록용) + 그 외는 조회 함수 | 전 도메인 |
 
 ### 0.2 도메인 관계도

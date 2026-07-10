@@ -51,4 +51,17 @@ describe('PATCH /api/rooms/[code]/seats — 운영자 좌석 강제 이동 (BUSI
     expect(status).toBe(200)
     expect(json.participant.seat_id).toBe('s1')
   })
+
+  it('동시 요청으로 사전 체크를 통과해도 DB 유니크 제약(23505)이면 409', async () => {
+    const fake = makeFakeSupabase([
+      { data: { id: 'r1', venue_id: 'v1', host_session: 'op-1' } },
+      { data: { id: 's1', venue_id: 'v1' } },
+      { data: null }, // 사전 체크는 통과 (레이스로 인해 빈 것처럼 보임)
+      { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } },
+    ])
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status, json } = await callPatch('ABC123', { operator_token: 'op-1', participant_id: 'p1', seat_id: 's1' })
+    expect(status).toBe(409)
+    expect(json.error).toContain('이미')
+  })
 })

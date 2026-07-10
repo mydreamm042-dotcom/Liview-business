@@ -60,14 +60,21 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: '참여자를 찾을 수 없습니다' }, { status: 404 })
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('operator_alerts')
     .update({ acknowledged_at: new Date().toISOString() })
     .eq('id', alert_id)
     .eq('participant_id', participant_id)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  // alert_id가 이 참여자 것이 아니면(스테일 id 등) 실제로 바뀐 행이 없다 — 조용히
+  // 성공 처리하면 클라이언트는 확인됐다고 믿지만 서버는 여전히 미확인 상태로 남는다.
+  if (!updated) {
+    return NextResponse.json({ error: '메시지를 찾을 수 없습니다' }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true })

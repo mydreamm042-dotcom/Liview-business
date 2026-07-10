@@ -21,6 +21,12 @@ async function callPost(code: string, body: Record<string, unknown>) {
 }
 
 describe('POST /api/rooms/[code]/alerts — 운영자 경고 메시지 (BUSINESS_RULES.md §2.9)', () => {
+  it('message가 문자열이 아니면 400 (500이 아님)', async () => {
+    mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([]))
+    const { status } = await callPost('ABC123', { operator_token: 'op-1', participant_id: 'p1', message: 123 })
+    expect(status).toBe(400)
+  })
+
   it('운영자가 아니면 403', async () => {
     const fake = makeFakeSupabase([{ data: { id: 'r1', host_session: 'real-op' } }])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)

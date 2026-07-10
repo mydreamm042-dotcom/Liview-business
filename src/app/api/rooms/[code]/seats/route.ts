@@ -3,7 +3,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 // 운영자의 좌석 강제 이동 (Seating 도메인, BUSINESS_RULES.md §2.8). 참여자 화면은 3초
 // 폴링으로 참여자 목록을 다시 받아오므로, 새 realtime 채널 없이도 곧 반영된다.
-// 좌석 이동은 착석 타이머를 리셋한다(§2.8 "좌석 이동 시 타이머 처리" 해석과 일치).
+// 좌석 이동은 착석 타이머를 리셋한다 — §2.8 "좌석 이동 시 타이머 처리" 항목은 아직
+// 미확정이라고 문서에 명시돼있고, 이건 그중 "리셋" 해석을 임시로 채택한 것뿐이다.
+// 다르게 확정되면 이 한 줄만 바꾸면 되도록 리셋 시점을 이 update 한 곳에 모아뒀다.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
   const { operator_token, participant_id, seat_id } = await req.json()
@@ -59,6 +61,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     .single()
 
   if (error) {
+    // occupant 체크는 사전 확인일 뿐이라 동시 요청(예: 참여자 셀프 선택과 동시에 발생한
+    // 이동)까지는 못 막는다 — 최종 방어는 idx_participants_seat_unique(DB 유니크 인덱스).
+    if (error.code === '23505') {
+      return NextResponse.json({ error: '이미 다른 손님이 앉은 좌석입니다' }, { status: 409 })
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

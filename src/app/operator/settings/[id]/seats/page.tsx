@@ -4,18 +4,9 @@ import { useEffect, useState, useCallback, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSessionToken } from '@/lib/session'
 import { Participant, VenueSeat, Reaction } from '@/lib/supabase/types'
-import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
+import { fmtSeatElapsed, isOccupantHot } from '@/lib/seatDisplay'
 
 const LONG_PRESS_MS = 2000
-
-function fmtElapsed(seatAssignedAt: string, now: number): string {
-  const sec = Math.max(0, Math.floor((now - new Date(seatAssignedAt).getTime()) / 1000))
-  const m = Math.floor(sec / 60)
-  const h = Math.floor(m / 60)
-  if (h > 0) return `${h}시간 ${m % 60}분째`
-  if (m > 0) return `${m}분째`
-  return '방금 앉음'
-}
 
 interface SessionInfo { id: string; code?: string; status: string }
 
@@ -45,7 +36,11 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
   const [sendingAlert, setSendingAlert] = useState(false)
   const [actionError, setActionError] = useState('')
 
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 눌린 좌석과 시작 시각만 기록해두고, "2초 이상 눌렀는지"는 뗄 때(pointerUp) 딱 한 번만
+  // 판정한다 — 누르는 도중 setTimeout으로 상태를 바꾸면, 그 직후 이어지는 pointerUp이
+  // "방금 무장된 좌석을 다시 탭한 것"으로 해석돼 무장 상태가 같은 제스처 안에서 바로
+  // 풀려버리는 문제가 있었다 (길게 눌렀다 떼는 순간 무장 배너가 뜨자마자 사라짐).
+  const pressStartRef = useRef<{ seatId: string; startedAt: number } | null>(null)
 
   useEffect(() => {
     const ticker = setInterval(() => setNow(Date.now()), 1_000)
@@ -169,15 +164,23 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
 
   const startPress = (seat: VenueSeat, occupant: Participant | undefined) => {
     if (!occupant) return
-    pressTimerRef.current = setTimeout(() => setArmedSeatId(seat.id), LONG_PRESS_MS)
+    pressStartRef.current = { seatId: seat.id, startedAt: Date.now() }
   }
-  const cancelPress = () => {
-    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null }
-  }
-  const handleSeatTap = (seat: VenueSeat, occupant: Participant | undefined) => {
+  const cancelPress = () => { pressStartRef.current = null }
+
+  // 이미 무장된 상태에서의 탭은 "이동 완료/취소"고, 무장되지 않은 상태에서의 탭은
+  // 눌린 시간에 따라 "무장 시작"(2초 이상) 또는 "손님 케어 메뉴"(짧게)로 갈린다.
+  const handleSeatRelease = (seat: VenueSeat, occupant: Participant | undefined) => {
     if (armedSeatId) {
       if (armedSeatId !== seat.id) handleMove(seat.id)
       else setArmedSeatId(null)
+      pressStartRef.current = null
+      return
+    }
+    const press = pressStartRef.current
+    pressStartRef.current = null
+    if (press?.seatId === seat.id && Date.now() - press.startedAt >= LONG_PRESS_MS) {
+      if (occupant) setArmedSeatId(seat.id)
       return
     }
     if (occupant) setMenuTarget(occupant)
@@ -239,15 +242,13 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {seats.map(seat => {
               const occupant = participants.find(p => p.seat_id === seat.id)
-              const occupantHot = occupant
-                ? hotIndexAt(simulateHotTaps(hotReactions.filter(r => r.receiver_id === occupant.id)), now) > 0
-                : false
+              const occupantHot = occupant ? isOccupantHot(occupant.id, hotReactions, now) : false
               return (
                 <div
                   key={seat.id}
                   className="card"
                   onPointerDown={() => startPress(seat, occupant)}
-                  onPointerUp={() => { cancelPress(); handleSeatTap(seat, occupant) }}
+                  onPointerUp={() => handleSeatRelease(seat, occupant)}
                   onPointerLeave={cancelPress}
                   onContextMenu={e => { e.preventDefault(); if (occupant) setMenuTarget(occupant) }}
                   style={{
@@ -260,7 +261,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
                     <div>
                       <p style={{ fontSize: 12, color: 'var(--text2)' }}>{occupant.nickname} {occupantHot && '🔥'}</p>
                       {occupant.seat_assigned_at && (
-                        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtElapsed(occupant.seat_assigned_at, now)}</p>
+                        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtSeatElapsed(occupant.seat_assigned_at, now)}</p>
                       )}
                     </div>
                   ) : (

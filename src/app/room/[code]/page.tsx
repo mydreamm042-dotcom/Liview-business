@@ -52,22 +52,29 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // BUSINESS 방은 좌석 선택이 필수다(BUSINESS_RULES.md §2.8) — 매장이 좌석을 하나라도
   // 등록해뒀는데 내가 아직 안 골랐다면 좌석 선택 화면으로 보낸다. 좌석이 하나도 없는
   // 매장(운영자가 아직 설정 안 함)은 이 게이트를 걸지 않는다 — 그렇지 않으면 아무도
-  // 못 들어오는 화면이 되어버린다.
+  // 못 들어오는 화면이 되어버린다. 호스트(운영자)는 손님 좌석을 고를 필요가 없으니 제외한다.
+  //
+  // 의존성 배열에 roomData 객체 자체를 넣지 않고 participantId만 뽑아서 넣는다 —
+  // getRoomData()는 매 렌더마다 localStorage를 새로 JSON.parse해 매번 다른 참조를
+  // 반환하므로, 이 방 화면이 1초 tick으로 계속 리렌더되는 것과 겹치면 객체를 그대로
+  // deps에 넣은 effect는 매초 정리/재실행된다 (아래 경고 메시지 폴링 effect도 같은 이유).
+  const myParticipantId = roomData?.participantId
   useEffect(() => {
-    if (!state.initialLoaded || !state.venue || state.seats.length === 0) return
-    const me = state.participants.find(p => p.id === roomData?.participantId)
+    if (!state.initialLoaded || !state.venue || state.seats.length === 0 || state.isHost) return
+    const me = state.participants.find(p => p.id === myParticipantId)
     if (me && !me.seat_id) router.replace(`/room/${code}/seats`)
-  }, [state.initialLoaded, state.venue, state.seats, state.participants, roomData, code, router])
+  }, [state.initialLoaded, state.venue, state.seats, state.participants, state.isHost, myParticipantId, code, router])
 
   // 운영자 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9) — BUSINESS 방에서만
   // 폴링한다. 확인하지 않은 메시지가 여러 개 쌓여도 서버가 가장 오래된 것부터 하나씩만
   // 내려주므로, 이 화면은 한 번에 모달 하나만 띄우면 된다.
   const [pendingAlert, setPendingAlert] = useState<{ id: string; message: string } | null>(null)
   const [acknowledgingAlert, setAcknowledgingAlert] = useState(false)
+  const [alertError, setAlertError] = useState('')
   useEffect(() => {
-    if (!state.venue || !roomData) return
+    if (!state.venue || !myParticipantId) return
     const fetchAlert = () => {
-      fetch(`/api/participants/alerts?participant_id=${roomData.participantId}&session_token=${encodeURIComponent(getSessionToken())}`)
+      fetch(`/api/participants/alerts?participant_id=${myParticipantId}&session_token=${encodeURIComponent(getSessionToken())}`)
         .then(res => res.json())
         .then(data => setPendingAlert(prev => prev ?? data.alert ?? null))
         .catch(() => {})
@@ -75,19 +82,25 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     fetchAlert()
     const interval = setInterval(fetchAlert, 5_000)
     return () => clearInterval(interval)
-  }, [state.venue, roomData])
+  }, [state.venue, myParticipantId])
 
   const handleAcknowledgeAlert = async () => {
-    if (!pendingAlert || !roomData) return
+    if (!pendingAlert || !myParticipantId) return
     setAcknowledgingAlert(true)
+    setAlertError('')
     try {
-      await fetch('/api/participants/alerts', {
+      const res = await fetch('/api/participants/alerts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alert_id: pendingAlert.id, participant_id: roomData.participantId, session_token: getSessionToken() }),
+        body: JSON.stringify({ alert_id: pendingAlert.id, participant_id: myParticipantId, session_token: getSessionToken() }),
       })
-    } finally {
+      // 실패했는데 모달을 조용히 닫아버리면 서버는 여전히 미확인 상태라 다음 폴링에 다시
+      // 떠서 사용자가 "분명 확인했는데 또 뜬다"고 혼란스러워한다 — 실패 시 모달을 유지한다.
+      if (!res.ok) throw new Error()
       setPendingAlert(null)
+    } catch {
+      setAlertError('확인 처리에 실패했어요. 다시 시도해주세요')
+    } finally {
       setAcknowledgingAlert(false)
     }
   }
@@ -511,9 +524,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 340, padding: '28px 22px', textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📢</div>
             <p style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 8, letterSpacing: '0.05em' }}>매장에서 보낸 메시지</p>
-            <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, lineHeight: 1.6 }}>{pendingAlert.message}</p>
+            <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, lineHeight: 1.6 }}>{pendingAlert.message}</p>
+            {alertError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 12 }}>{alertError}</p>}
             <button onClick={handleAcknowledgeAlert} disabled={acknowledgingAlert} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48, opacity: acknowledgingAlert ? 0.6 : 1 }}>
-              확인
+              {acknowledgingAlert ? '처리 중...' : '확인'}
             </button>
           </div>
         </div>

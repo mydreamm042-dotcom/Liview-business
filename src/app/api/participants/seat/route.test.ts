@@ -75,4 +75,20 @@ describe('PATCH /api/participants/seat — 참여자 좌석 선택 (BUSINESS_RUL
     expect(status).toBe(200)
     expect(json.participant.seat_id).toBe('seat1')
   })
+
+  // 사전 occupant 체크는 동시 요청 사이의 틈을 못 막는다 — 두 참여자가 거의 동시에 같은
+  // 좌석을 선택해 사전 체크를 둘 다 통과해도, DB 유니크 인덱스(23505)가 최종 방어선이 된다.
+  it('동시 요청으로 사전 체크를 통과해도 DB 유니크 제약(23505)이면 409', async () => {
+    const fake = makeFakeSupabase([
+      { data: { id: 'p1', room_id: 'r1' } },
+      { data: { id: 'r1', venue_id: 'v1' } },
+      { data: { id: 'seat1', venue_id: 'v1' } },
+      { data: null }, // 사전 체크는 통과 (레이스로 인해 빈 것처럼 보임)
+      { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } },
+    ])
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status, json } = await callPatch({ participant_id: 'p1', session_token: 's1', seat_id: 'seat1' })
+    expect(status).toBe(409)
+    expect(json.error).toContain('이미')
+  })
 })

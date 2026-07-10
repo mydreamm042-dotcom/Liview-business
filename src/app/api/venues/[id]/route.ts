@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { verifyVenueOwner } from '@/lib/server/venueAuth'
 
 // 공개 조회용 브랜딩 필드. operator_owner_token은 물론 public_chat_enabled 같은
 // 운영 설정도 굳이 외부에 노출할 필요가 없어 화이트리스트 방식으로 고른다.
@@ -64,19 +65,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: venue } = await supabase
-    .from('venues')
-    .select('id, operator_owner_token')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (!venue) {
-    return NextResponse.json({ error: '매장을 찾을 수 없습니다' }, { status: 404 })
-  }
-
-  if (venue.operator_owner_token !== operator_token) {
-    return NextResponse.json({ error: '매장 운영자만 설정을 변경할 수 있습니다' }, { status: 403 })
-  }
+  const owner = await verifyVenueOwner(supabase, id, operator_token, '설정을 변경할 수 있습니다')
+  if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const updatePayload: Record<string, unknown> = {}
   for (const field of UPDATABLE_FIELDS) {

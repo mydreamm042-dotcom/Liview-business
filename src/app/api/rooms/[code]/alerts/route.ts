@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
   const { code } = await params
   const { operator_token, participant_id, message } = await req.json()
 
-  if (!operator_token || !participant_id || !message?.trim()) {
+  if (!operator_token || !participant_id || typeof message !== 'string' || !message.trim()) {
     return NextResponse.json({ error: '운영자 세션, 손님, 메시지가 필요합니다' }, { status: 400 })
   }
 

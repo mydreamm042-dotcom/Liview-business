@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { verifyVenueOwner } from '@/lib/server/venueAuth'
 
 // 매장 좌석 마스터 목록 (Seating 도메인, BUSINESS_RULES.md §2.8). 세션(오늘 영업)이 몇 번
 // 바뀌어도 유지되는 Venue 소유 데이터라 venue_id 하나로만 관리한다.
@@ -20,24 +21,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ seats: seats ?? [] })
 }
 
-async function verifyOwner(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  venueId: string,
-  operatorToken: string,
-) {
-  const { data: venue } = await supabase
-    .from('venues')
-    .select('id, operator_owner_token')
-    .eq('id', venueId)
-    .maybeSingle()
-
-  if (!venue) return { ok: false as const, status: 404, error: '매장을 찾을 수 없습니다' }
-  if (venue.operator_owner_token !== operatorToken) {
-    return { ok: false as const, status: 403, error: '매장 운영자만 좌석을 관리할 수 있습니다' }
-  }
-  return { ok: true as const }
-}
-
 // 좌석 추가. 정렬 순서는 뒤에 이어붙인다 (기존 좌석 수를 세어 다음 순번을 부여).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -48,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyOwner(supabase, id, operator_token)
+  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const { count } = await supabase
@@ -79,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyOwner(supabase, id, operator_token)
+  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const { data: seat, error } = await supabase
@@ -108,7 +91,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyOwner(supabase, id, operator_token)
+  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const { error } = await supabase

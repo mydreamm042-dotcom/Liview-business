@@ -68,11 +68,21 @@ describe('PATCH /api/participants/alerts — 확인 처리', () => {
   it('확인 처리에 성공한다', async () => {
     const fake = makeFakeSupabase([
       { data: { id: 'p1' } },
-      { data: null, error: null },
+      { data: { id: 'a1' }, error: null },
     ])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status, json } = await callPatch({ alert_id: 'a1', participant_id: 'p1', session_token: 's1' })
     expect(status).toBe(200)
     expect(json.ok).toBe(true)
+  })
+
+  it('alert_id가 이 참여자 것이 아니면 실제로 바뀐 행이 없어 404', async () => {
+    const fake = makeFakeSupabase([
+      { data: { id: 'p1' } },
+      { data: null, error: null }, // 조건에 맞는 행 없음 (스테일 alert_id 등)
+    ])
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status } = await callPatch({ alert_id: 'stale-id', participant_id: 'p1', session_token: 's1' })
+    expect(status).toBe(404)
   })
 })
