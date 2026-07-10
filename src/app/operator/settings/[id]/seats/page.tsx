@@ -104,9 +104,11 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operator_token: operatorToken, label: newSeatLabel.trim() }),
       })
+      const data = await res.json()
       if (!res.ok) throw new Error()
+      // 응답에 이미 새 좌석 전체가 들어있으니, 목록을 처음부터 다시 조회하지 않고 그대로 붙인다.
+      setSeats(prev => [...prev, data.seat])
       setNewSeatLabel('')
-      loadSeats()
     } catch {
       setActionError('좌석 추가에 실패했습니다')
     } finally {
@@ -116,12 +118,14 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
 
   const handleDeleteSeat = async (seatId: string) => {
     if (!confirm('이 좌석을 삭제할까요?')) return
-    await fetch(`/api/venues/${id}/seats`, {
+    setSeats(prev => prev.filter(s => s.id !== seatId))
+    const res = await fetch(`/api/venues/${id}/seats`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operator_token: operatorToken, seat_id: seatId }),
     })
-    loadSeats()
+    // 실패했으면 지웠다고 착각하지 않도록 목록을 다시 맞춘다 (성공 시엔 재조회 불필요).
+    if (!res.ok) loadSeats()
   }
 
   const handleMove = async (targetSeatId: string) => {

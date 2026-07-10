@@ -45,7 +45,12 @@ describe('GET /api/venues/[id]/seats', () => {
 
 describe('POST /api/venues/[id]/seats — 좌석 추가', () => {
   it('운영자가 아니면 403', async () => {
-    const fake = makeFakeSupabase([{ data: { id: 'v1', operator_owner_token: 'real-owner' } }])
+    // 소유자 확인과 좌석 개수 조회를 병렬로 보내므로, 소유자가 아니어도 두 쿼리 다 나간다
+    // (개수 조회 결과는 버려지고 403으로 응답).
+    const fake = makeFakeSupabase([
+      { data: { id: 'v1', operator_owner_token: 'real-owner' } },
+      { count: 0 },
+    ])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status } = await callPost('v1', { operator_token: 'impostor', label: '1번' })
     expect(status).toBe(403)

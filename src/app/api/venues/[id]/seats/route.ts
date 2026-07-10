@@ -31,13 +31,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
-  if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
-  const { count } = await supabase
-    .from('venue_seats')
-    .select('id', { count: 'exact', head: true })
-    .eq('venue_id', id)
+  // 소유자 확인과 "기존 좌석 몇 개인지"는 서로 결과를 필요로 하지 않으므로 병렬로 보낸다
+  // (직렬로 하면 왕복 시간이 그대로 두 배로 더해짐 — INSERT만 둘 다 끝난 뒤 실행).
+  const [owner, countResult] = await Promise.all([
+    verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다'),
+    supabase.from('venue_seats').select('id', { count: 'exact', head: true }).eq('venue_id', id),
+  ])
+  if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
+  const { count } = countResult
 
   const { data: seat, error } = await supabase
     .from('venue_seats')
