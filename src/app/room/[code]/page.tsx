@@ -49,6 +49,49 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     () => router.push(`/room/${code}/result`),
   )
 
+  // BUSINESS 방은 좌석 선택이 필수다(BUSINESS_RULES.md §2.8) — 매장이 좌석을 하나라도
+  // 등록해뒀는데 내가 아직 안 골랐다면 좌석 선택 화면으로 보낸다. 좌석이 하나도 없는
+  // 매장(운영자가 아직 설정 안 함)은 이 게이트를 걸지 않는다 — 그렇지 않으면 아무도
+  // 못 들어오는 화면이 되어버린다.
+  useEffect(() => {
+    if (!state.initialLoaded || !state.venue || state.seats.length === 0) return
+    const me = state.participants.find(p => p.id === roomData?.participantId)
+    if (me && !me.seat_id) router.replace(`/room/${code}/seats`)
+  }, [state.initialLoaded, state.venue, state.seats, state.participants, roomData, code, router])
+
+  // 운영자 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9) — BUSINESS 방에서만
+  // 폴링한다. 확인하지 않은 메시지가 여러 개 쌓여도 서버가 가장 오래된 것부터 하나씩만
+  // 내려주므로, 이 화면은 한 번에 모달 하나만 띄우면 된다.
+  const [pendingAlert, setPendingAlert] = useState<{ id: string; message: string } | null>(null)
+  const [acknowledgingAlert, setAcknowledgingAlert] = useState(false)
+  useEffect(() => {
+    if (!state.venue || !roomData) return
+    const fetchAlert = () => {
+      fetch(`/api/participants/alerts?participant_id=${roomData.participantId}&session_token=${encodeURIComponent(getSessionToken())}`)
+        .then(res => res.json())
+        .then(data => setPendingAlert(prev => prev ?? data.alert ?? null))
+        .catch(() => {})
+    }
+    fetchAlert()
+    const interval = setInterval(fetchAlert, 5_000)
+    return () => clearInterval(interval)
+  }, [state.venue, roomData])
+
+  const handleAcknowledgeAlert = async () => {
+    if (!pendingAlert || !roomData) return
+    setAcknowledgingAlert(true)
+    try {
+      await fetch('/api/participants/alerts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alert_id: pendingAlert.id, participant_id: roomData.participantId, session_token: getSessionToken() }),
+      })
+    } finally {
+      setPendingAlert(null)
+      setAcknowledgingAlert(false)
+    }
+  }
+
   // 채팅창이 닫혀 있어도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
   // (ChatPanel 안에서만 구독하면 창을 닫는 순간 구독이 끊겨 안읽음 배지를 셀 수 없음).
   const { messages: chatMessages, loading: chatLoading, sendMessage } = useChat(roomData?.roomId ?? '')
@@ -460,6 +503,22 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       {showChat && (
         <ChatPanel messages={chatMessages} loading={chatLoading} sendMessage={sendMessage} myParticipantId={roomData.participantId} myNickname={roomData.nickname} onClose={() => setShowChat(false)} />
       )}
+
+      {/* 운영자 경고 메시지 모달 — 확인 버튼을 눌러야만 닫힌다 (배경 클릭으로 안 닫힘).
+          BUSINESS_RULES.md §2.9 확정 사항: 화면을 가리는 모달로 즉시 인지시켜야 함. */}
+      {pendingAlert && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', padding: '0 32px' }}>
+          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 340, padding: '28px 22px', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📢</div>
+            <p style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 8, letterSpacing: '0.05em' }}>매장에서 보낸 메시지</p>
+            <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, lineHeight: 1.6 }}>{pendingAlert.message}</p>
+            <button onClick={handleAcknowledgeAlert} disabled={acknowledgingAlert} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48, opacity: acknowledgingAlert ? 0.6 : 1 }}>
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
       <HeartToast />
     </main>
   )

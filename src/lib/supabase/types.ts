@@ -65,6 +65,29 @@ export interface Participant {
   // 베타 참여도 분석용: 결과 화면/채팅창을 최초로 연 시각 (없으면 아직 안 열어봄)
   result_viewed_at?: string | null
   chat_opened_at?: string | null
+  // Seating 도메인 (BUSINESS_RULES.md §2.8) — BUSINESS 방만 사용, PERSONAL은 항상 null
+  seat_id?: string | null
+  seat_assigned_at?: string | null
+}
+
+// 매장 좌석 마스터 (Seating 도메인). 세션(오늘 영업)이 바뀌어도 유지되는 Venue 소유 데이터.
+export interface VenueSeat {
+  id: string
+  venue_id: string
+  label: string
+  sort_order: number
+  created_at: string
+}
+
+// 운영자가 특정 손님에게 보내는 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9).
+// reactions.warning(참여자 간 익명 자제 시그널)과는 별개 개념.
+export interface OperatorAlert {
+  id: string
+  room_id: string
+  participant_id: string
+  message: string
+  created_at: string
+  acknowledged_at: string | null
 }
 
 export interface Reaction {

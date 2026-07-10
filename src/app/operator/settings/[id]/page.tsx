@@ -236,6 +236,16 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         </button>
       </div>
 
+      {/* 좌석 배치 + 손님 케어 (Seating/Guest Care 도메인) */}
+      <button className="card" onClick={() => router.push(`/operator/settings/${id}/seats`)}
+        style={{ padding: 18, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>좌석 관리</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>좌석 구성, 실시간 자리배치도, 손님 케어</p>
+        </div>
+        <span style={{ color: 'var(--muted2)' }}>→</span>
+      </button>
+
       {/* 고정 QR — 한 번 등록하면 바뀌지 않음. 방 코드는 별도로 노출하지 않는다
           (BUSINESS_RULES.md §2.2, Discovery 도메인과 동일하게 코드/QR 절대 미표시 원칙) */}
       <div className="card" style={{ padding: 18, marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

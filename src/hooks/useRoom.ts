@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Participant, Reaction, VenueBranding } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueBranding, VenueSeat } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
 
@@ -21,6 +21,8 @@ export interface RoomState {
   isHost: boolean
   // BUSINESS 방이면 매장 브랜딩, PERSONAL 방이면 null. 서버가 GET /api/rooms/[code]에서 내려준다.
   venue: VenueBranding | null
+  // Seating 도메인(§2.8) — BUSINESS 방의 좌석 목록. PERSONAL 방은 항상 빈 배열.
+  seats: VenueSeat[]
   initialLoaded: boolean
 }
 
@@ -41,6 +43,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
     totalReactions: 0,
     isHost: false,
     venue: null,
+    seats: [],
     initialLoaded: false,
   })
   const supabase = createClient()
@@ -93,6 +96,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       totalReactions: reactions.filter(r => r.type !== 'hot').length,
       isHost: pData.isHost ?? false,
       venue: pData.venue ?? null,
+      seats: pData.seats ?? [],
       initialLoaded: true,
     }))
   }, [roomId, roomCode])
@@ -155,6 +159,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
         moodAverage: summary ? summary.mood_average : prev.moodAverage,
         totalReactions: summary ? summary.total_reactions : prev.totalReactions,
         isHost: typeof pData.isHost === 'boolean' ? pData.isHost : prev.isHost,
+        seats: pData.seats ?? prev.seats,
       }
     })
   }, [roomId, roomCode])

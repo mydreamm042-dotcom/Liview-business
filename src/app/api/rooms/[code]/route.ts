@@ -19,9 +19,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
   // left_at이 채워진(나간) 참여자도 함께 내려준다 — 결과 페이지 집계에는 필요하고,
   // 방 화면의 참여자 목록은 클라이언트(useRoom)에서 left_at 없는 사람만 걸러 쓴다.
+  // seat_id/seat_assigned_at: Seating 도메인(§2.8) — PERSONAL 방은 항상 null
   const { data: participants } = await supabase
     .from('participants')
-    .select('id, room_id, joined_at, nickname, left_at')
+    .select('id, room_id, joined_at, nickname, left_at, seat_id, seat_assigned_at')
     .eq('room_id', room.id)
     .order('joined_at', { ascending: true })
 
@@ -32,9 +33,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   void host_session
   const isHost = session_token != null && room.host_session === session_token
 
-  // BUSINESS 방이면 매장 브랜딩을 함께 내려준다 (매장명/로고/컬러/리뷰 URL).
-  // 참여자 화면이 방 이름보다 매장 브랜딩을 우선 노출하는 데 쓴다. PERSONAL 방은 null.
+  // BUSINESS 방이면 매장 브랜딩 + 좌석 목록을 함께 내려준다. 참여자 화면이 방 이름보다
+  // 매장 브랜딩을 우선 노출하는 데 쓴다. PERSONAL 방은 둘 다 null/빈 배열.
   let venue = null
+  let seats: unknown[] = []
   if (room.room_type === 'BUSINESS' && room.venue_id) {
     const { data: venueData } = await supabase
       .from('venues')
@@ -45,9 +47,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       .eq('id', room.venue_id)
       .maybeSingle()
     venue = venueData
+
+    const { data: seatData } = await supabase
+      .from('venue_seats')
+      .select('id, venue_id, label, sort_order, created_at')
+      .eq('venue_id', room.venue_id)
+      .order('sort_order', { ascending: true })
+    seats = seatData ?? []
   }
 
-  return NextResponse.json({ room: safeRoom, participants, isHost, venue })
+  return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {

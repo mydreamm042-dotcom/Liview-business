@@ -46,15 +46,17 @@ describe('GET /api/rooms/[code] — 매장 브랜딩 동봉', () => {
     expect(fake.from).not.toHaveBeenCalledWith('venues')
   })
 
-  it('BUSINESS 방은 매장 브랜딩을 함께 반환한다', async () => {
+  it('BUSINESS 방은 매장 브랜딩과 좌석 목록을 함께 반환한다', async () => {
     const fake = makeFakeSupabase([
       { data: { id: 'r1', host_session: 'h1', room_type: 'BUSINESS', venue_id: 'v1' }, error: null },
       { data: [] }, // participants
       { data: { id: 'v1', name: '별빛포차', primary_color: '#111' } }, // venue
+      { data: [{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }] }, // seats
     ])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { json } = await callGet('ABC123')
     expect(json.venue).toEqual({ id: 'v1', name: '별빛포차', primary_color: '#111' })
+    expect(json.seats).toEqual([{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }])
   })
 })
 
