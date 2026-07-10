@@ -142,3 +142,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Claude Code agent worktrees (ephemeral isolation copies, not project state)
+.claude/worktrees/
