@@ -1,7 +1,7 @@
 # MySTAR/Liview B2B 로드맵 v2
 
 ## 이 문서의 위치
-기존 `B2B_PIVOT_DESIGN.md`(섹션 7)와 `IMPLEMENTATION_CHECKLIST.md`가 Phase 순서를 정의했지만, 새 아이디어(지도 기반 홈 화면, 좌석 배치, 손님 케어)가 그 순서에 영향을 주므로 **이 문서가 Phase 순서에 대해 최신 기준**이다. 세부 태스크 체크리스트는 기존 `IMPLEMENTATION_CHECKLIST.md`를 계속 참고하되, 몇 번째로 하느냐는 이 문서를 따른다.
+초기 설계 초안이 Phase 순서를 정의했지만(지금은 삭제됨, `README.md` 참고), 새 아이디어(지도 기반 홈 화면, 좌석 배치, 손님 케어)가 그 순서에 영향을 주므로 **이 문서가 Phase 순서에 대해 최신 기준**이다. 세부 태스크 체크리스트는 기존 `IMPLEMENTATION_CHECKLIST.md`를 계속 참고하되, 몇 번째로 하느냐는 이 문서를 따른다.
 
 이 문서는 계속 갱신된다 (v2 안에서 개정). 새 아이디어가 들어올 때마다 새 파일을 또 만들지 않고, 이 문서 하나를 최신 상태로 유지한다 (`CHANGE_INTAKE_PROCESS.md` 원칙).
 
@@ -79,7 +79,7 @@
 ## Phase 3 상세 — Liview 홈 (지도 + 실시간 탐색)
 
 ### 스코프
-1. `get_live_hot_venues()` 함수 실제 마이그레이션 반영 (현재 `B2B_MIGRATION_V2.sql`엔 설계만 있고 `supabase/migrations/`엔 미적용)
+1. `get_live_hot_venues()` 함수 (완료 — `supabase/migrations/0002_discovery.sql`, `0004_discovery_geofence_radius.sql`)
 2. `GET /api/discover/venues` — 위치 기반 실시간 HOT 매장 목록 (카테고리 필터, 정렬)
 3. 홈 화면 교체 — `src/app/page.tsx`를 지도 기반으로. 하단 3버튼: 입장하기 / 실시간 핫한 가게 찾기 / 방 만들기
 4. 매장 카드/상세 화면 — 실시간 HOT·만족도, opt-in 매장만 채팅 프리뷰. **방 코드/QR 절대 미표시**

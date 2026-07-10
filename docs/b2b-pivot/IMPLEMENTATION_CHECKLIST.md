@@ -3,12 +3,15 @@
 ## Overview
 This checklist tracks the implementation of the B2B pivot feature across 6 phases. Each phase builds on the previous one and should be completed before moving to the next.
 
+> ⚠️ Phase 순서/스코프는 `ROADMAP_V2.md`가 최신 기준이다 (이 문서의 6-phase 구조와 다름). 아래 세부 항목은
+> 실제 적용된 스키마(`supabase/migrations/*.sql`)와 어긋나는 부분이 있을 수 있다.
+
 ---
 
 ## Phase 1: Foundation (Core B2B Structure)
 
 ### Database Schema
-- [ ] Deploy B2B_MIGRATION.sql to Supabase
+- [ ] Deploy schema changes via `supabase/migrations/*.sql`
 - [ ] Verify new tables created:
   - [ ] room_configs
   - [ ] operator_sessions

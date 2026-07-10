@@ -163,7 +163,7 @@ Operator Analytics: 위 전체 도메인을 읽기 전용으로 가로질러 재
 
 ## Part 2. 도메인별 Business Rule — 신규 B2B (BUSINESS 방 전용)
 
-> 아래 규칙은 모두 **BUSINESS 타입 방에서만 적용**되며, PERSONAL 방에는 어떠한 영향도 주지 않는다. (설계 근거: `B2B_PIVOT_DESIGN.md`, `B2B_PIVOT_ADDENDUM.md`)
+> 아래 규칙은 모두 **BUSINESS 타입 방에서만 적용**되며, PERSONAL 방에는 어떠한 영향도 주지 않는다.
 
 ### 2.1 Room 도메인 확장 규칙 (Room Type / 마감)
 
@@ -330,5 +330,5 @@ PERSONAL 방은 위 순서 중 어떤 신규 단계도 노출되지 않으며, �
 
 - 이 문서는 기존 코드(`supabase/schema.sql`, `src/lib/*.ts`, `src/app/api/**/*.ts`)를 근거로 작성되었으며, 구현 중 규칙이 변경될 경우 반드시 이 문서를 함께 갱신한다.
 - Part 1(기존 도메인/규칙)은 원칙적으로 수정하지 않는다. 수정이 필요하다고 판단되면 별도로 사용자 승인을 받는다.
-- Part 2(신규 도메인/규칙)는 `B2B_PIVOT_DESIGN.md` / `B2B_PIVOT_ADDENDUM.md`의 스키마·API 설계와 항상 동기화되어야 한다.
+- Part 2(신규 도메인/규칙)는 `supabase/migrations/*.sql`에 실제 적용된 스키마와 항상 동기화되어야 한다.
 - 새로운 기능을 추가할 때는 먼저 "이것이 기존 도메인의 규칙 확장인지, 새로운 도메인인지"를 판단한 뒤 이 문서의 Part 0(도메인 정의)부터 갱신한다.
