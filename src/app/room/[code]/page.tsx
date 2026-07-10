@@ -13,6 +13,7 @@ import ChatPanel from '@/components/ChatPanel'
 import BrandHeader from '@/components/BrandHeader'
 import { simulateHotTaps, hotIndexAt, HOT_HOLD_MS, HOT_TOTAL_MS } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS } from '@/lib/cooldown'
+import { fmtSeatElapsed, isOccupantHot } from '@/lib/seatDisplay'
 
 function fmtCd(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
@@ -440,6 +441,45 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           }}>🔥 HOT!</button>
         </div>
       </div>
+
+      {/* BUSINESS 방 + 좌석 설정이 있는 매장이면, 방 화면에서도 자리배치도가 계속 보인다
+          (Seating 도메인, BUSINESS_RULES.md §2.8) — 입장 시 한 번 고르고 끝나는 게 아니라
+          누가 어느 좌석인지, HOT 여부, 착석 시간을 방 화면에서도 확인할 수 있어야 한다. */}
+      {state.venue && state.seats.length > 0 && (
+        <div style={{ padding: '0 20px', marginBottom: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>자리배치도</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {state.seats.map(seat => {
+              const occupant = state.participants.find(p => p.seat_id === seat.id)
+              const isMe = occupant?.id === roomData.participantId
+              const occupantHot = occupant
+                ? isOccupantHot(occupant.id, state.reactions.filter(r => r.type === 'hot'), Date.now())
+                : false
+              return (
+                <div key={seat.id} className="card" style={{
+                  padding: '12px 14px',
+                  borderColor: isMe ? 'rgba(255,107,107,0.25)' : undefined,
+                  background: isMe ? 'rgba(255,107,107,0.05)' : undefined,
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{seat.label}</p>
+                  {occupant ? (
+                    <div>
+                      <p style={{ fontSize: 12, color: isMe ? 'var(--accent)' : 'var(--text2)' }}>
+                        {occupant.nickname}{isMe ? ' (나)' : ''} {occupantHot && '🔥'}
+                      </p>
+                      {occupant.seat_assigned_at && (
+                        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtSeatElapsed(occupant.seat_assigned_at, Date.now())}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 12, color: 'var(--muted2)' }}>빈 자리</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '0 20px', flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>

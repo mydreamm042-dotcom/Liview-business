@@ -3,11 +3,12 @@
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
-import { getSessionToken } from '@/lib/session'
+import { getSessionToken, storeRoomData } from '@/lib/session'
 import { Venue, VenueCategory } from '@/lib/supabase/types'
 
 interface Session {
   id: string
+  code?: string
   name: string
   status: string
   created_at: string
@@ -123,6 +124,33 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
     }
   }
 
+  // 운영자가 손님과 같은 방 화면(반응/HOT/채팅/자리배치)을 그대로 보고 싶을 때 쓴다.
+  // 비밀번호/위치 검사 없이 host_session 일치만으로 "사장님" 닉네임 참여자로 등록된다.
+  const [enteringRoom, setEnteringRoom] = useState(false)
+  const handleEnterRoom = async () => {
+    if (!session?.code) return
+    setEnteringRoom(true)
+    setSessionError('')
+    try {
+      const res = await fetch(`/api/rooms/${session.code}/operator-join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_token: getSessionToken() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      storeRoomData({
+        roomId: data.room.id, roomCode: data.room.code, roomName: data.room.name,
+        participantId: data.participant.id, nickname: data.participant.nickname,
+      })
+      router.push(`/room/${data.room.code}`)
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : '방 화면 입장에 실패했습니다')
+    } finally {
+      setEnteringRoom(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim()) return
     setSaveError('')
@@ -227,13 +255,24 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           {isOpen ? `${session?.name} · 손님이 QR로 바로 입장할 수 있어요` : '오늘 영업을 시작하면 QR로 손님이 입장할 수 있어요'}
         </p>
         {sessionError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>{sessionError}</p>}
-        <button
-          className={isOpen ? 'btn btn-secondary' : 'btn btn-primary'}
-          onClick={isOpen ? handleEndSession : handleStartSession}
-          disabled={!sessionLoaded || sessionBusy}
-          style={{ opacity: !sessionLoaded || sessionBusy ? 0.5 : 1, fontSize: 15 }}>
-          {sessionBusy ? '처리 중...' : isOpen ? '오늘 영업 종료' : '오늘 영업 시작'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className={isOpen ? 'btn btn-secondary' : 'btn btn-primary'}
+            onClick={isOpen ? handleEndSession : handleStartSession}
+            disabled={!sessionLoaded || sessionBusy}
+            style={{ flex: 1, opacity: !sessionLoaded || sessionBusy ? 0.5 : 1, fontSize: 15 }}>
+            {sessionBusy ? '처리 중...' : isOpen ? '오늘 영업 종료' : '오늘 영업 시작'}
+          </button>
+          {isOpen && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleEnterRoom}
+              disabled={enteringRoom}
+              style={{ flex: 1, opacity: enteringRoom ? 0.5 : 1, fontSize: 15 }}>
+              {enteringRoom ? '입장 중...' : '👁️ 방 화면 보기'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 좌석 배치 + 손님 케어 (Seating/Guest Care 도메인) */}

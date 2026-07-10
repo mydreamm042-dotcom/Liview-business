@@ -21,6 +21,7 @@ interface VenuePublic {
   category: VenueCategory | null
   logo_url: string | null
   primary_color: string | null
+  join_password_enabled: boolean
 }
 
 type LocationState = 'requesting' | 'granted' | 'denied'
@@ -40,7 +41,6 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
 
   const [nickname, setNickname] = useState(() => randomNickname())
   const [password, setPassword] = useState('')
-  const [needsPassword, setNeedsPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -72,9 +72,12 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => { requestLocation() }, [])
 
+  const passwordRequired = venue?.join_password_enabled ?? false
+
   const handleJoin = async () => {
     if (!nickname.trim()) { setError('닉네임을 입력해주세요'); return }
     if (!coords) { setError('위치 확인이 필요합니다'); return }
+    if (passwordRequired && !password.trim()) { setError('입장 비밀번호를 입력해주세요'); return }
     setLoading(true); setError('')
     try {
       const session_token = getSessionToken()
@@ -90,10 +93,7 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
         }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        if (typeof data.error === 'string' && data.error.includes('비밀번호')) setNeedsPassword(true)
-        throw new Error(data.error)
-      }
+      if (!res.ok) throw new Error(data.error)
       storeRoomData({
         roomId: data.room.id, roomCode: data.room.code, roomName: data.room.name,
         participantId: data.participant.id, nickname: nickname.trim(),
@@ -169,7 +169,7 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
         🎲 다른 별명 추첨하기
       </button>
 
-      {needsPassword && (
+      {passwordRequired && (
         <div style={{ marginTop: 20 }}>
           <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>오늘의 입장 비밀번호</label>
           <input
@@ -180,14 +180,16 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
             onKeyDown={e => e.key === 'Enter' && handleJoin()}
             placeholder="매장에서 안내받은 비밀번호"
             autoComplete="off"
+            autoFocus
           />
         </div>
       )}
 
       {error && <p style={{ marginTop: 12, fontSize: 13, color: '#ff6b6b' }}>{error}</p>}
 
-      <button className="btn btn-primary" onClick={handleJoin} disabled={loading || !nickname.trim() || locationState !== 'granted'}
-        style={{ marginTop: 20, opacity: loading || !nickname.trim() || locationState !== 'granted' ? 0.4 : 1, fontSize: 17 }}>
+      <button className="btn btn-primary" onClick={handleJoin}
+        disabled={loading || !nickname.trim() || locationState !== 'granted' || (passwordRequired && !password.trim())}
+        style={{ marginTop: 20, opacity: loading || !nickname.trim() || locationState !== 'granted' || (passwordRequired && !password.trim()) ? 0.4 : 1, fontSize: 17 }}>
         {loading ? '입장 중...' : '🚀 입장하기'}
       </button>
     </main>

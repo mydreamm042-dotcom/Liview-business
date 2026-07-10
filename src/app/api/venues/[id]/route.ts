@@ -4,9 +4,13 @@ import { verifyVenueOwner } from '@/lib/server/venueAuth'
 
 // 공개 조회용 브랜딩 필드. operator_owner_token은 물론 public_chat_enabled 같은
 // 운영 설정도 굳이 외부에 노출할 필요가 없어 화이트리스트 방식으로 고른다.
+// join_password_enabled는 예외적으로 공개 — "비밀번호가 필요한지" 여부만 알려주는
+// boolean이고 실제 비밀번호(join_password)는 절대 포함하지 않는다. 이 값이 없으면
+// /v/[id] 랜딩 화면이 비밀번호가 필요한지 미리 알 수 없어, 참여자가 일단 제출해서
+// 틀렸다는 응답을 받고서야 입력창이 뜨는 혼란스러운 흐름이 된다.
 const PUBLIC_FIELDS =
   'id, name, category, logo_url, hero_image_url, primary_color, secondary_color, ' +
-  'naver_review_url, google_review_url, kakao_review_url'
+  'naver_review_url, google_review_url, kakao_review_url, join_password_enabled'
 
 // 운영자가 수정할 수 있는 필드 화이트리스트. 이 밖의 키는 무시된다
 // (operator_owner_token 탈취 시도, created_at 조작 등 방지).
