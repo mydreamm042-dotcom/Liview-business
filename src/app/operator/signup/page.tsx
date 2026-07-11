@@ -85,6 +85,10 @@ export default function OperatorSignupPage() {
       <button className="btn btn-ghost" onClick={() => router.push('/operator/login')} style={{ marginTop: 12, fontSize: 14 }}>
         이미 계정이 있어요
       </button>
+
+      <button className="btn btn-ghost" onClick={() => router.push('/operator/claim')} style={{ marginTop: 4, fontSize: 13, color: 'var(--muted2)' }}>
+        기존 매장이 있으신가요? · 매장 가져오기
+      </button>
     </main>
   )
 }
