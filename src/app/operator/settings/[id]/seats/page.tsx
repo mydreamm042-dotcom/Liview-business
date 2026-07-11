@@ -17,7 +17,9 @@ interface SessionInfo { id: string; code?: string; status: string }
 export default function OperatorSeatsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const operatorToken = getSessionToken()
+  // 운영자 자신의 참여자 신원용 익명 세션 토큰 (Operator 도메인 §2.11 전환 이후 API 인증
+  // 자체는 로그인 쿠키가 담당하고, 이 값은 방 참여자 조회 시 쓰는 별개 개념이다).
+  const sessionToken = getSessionToken()
 
   const [venueName, setVenueName] = useState('')
   const [loadError, setLoadError] = useState('')
@@ -56,7 +58,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
 
   const loadRoomState = useCallback(async (code: string) => {
     const [rRes] = await Promise.all([
-      fetch(`/api/rooms/${code}?session_token=${encodeURIComponent(operatorToken)}`),
+      fetch(`/api/rooms/${code}?session_token=${encodeURIComponent(sessionToken)}`),
     ])
     const rData = await rRes.json()
     if (!rRes.ok) return
@@ -65,10 +67,10 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     const hRes = await fetch(`/api/reactions?room_id=${rData.room.id}&type=hot`)
     const hData = await hRes.json()
     setHotReactions(hData.reactions ?? [])
-  }, [operatorToken])
+  }, [sessionToken])
 
   useEffect(() => {
-    fetch(`/api/venues/${id}?operator_token=${encodeURIComponent(operatorToken)}`)
+    fetch(`/api/venues/${id}`)
       .then(res => res.json())
       .then(data => {
         if (!data.venue || !data.isOwner) {
@@ -79,7 +81,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
       })
       .catch(() => setLoadError('매장 정보를 불러오지 못했습니다'))
 
-    fetch(`/api/venues/${id}/session?operator_token=${encodeURIComponent(operatorToken)}`)
+    fetch(`/api/venues/${id}/session`)
       .then(res => res.json())
       .then(data => setSession(data.session ?? null))
       .catch(() => {})
@@ -102,7 +104,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/venues/${id}/seats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_token: operatorToken, label: newSeatLabel.trim() }),
+        body: JSON.stringify({ label: newSeatLabel.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error()
@@ -122,7 +124,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     const res = await fetch(`/api/venues/${id}/seats`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operator_token: operatorToken, seat_id: seatId }),
+      body: JSON.stringify({ seat_id: seatId }),
     })
     // 실패했으면 지웠다고 착각하지 않도록 목록을 다시 맞춘다 (성공 시엔 재조회 불필요).
     if (!res.ok) loadSeats()
@@ -137,7 +139,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/rooms/${session.code}/seats`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_token: operatorToken, participant_id: occupant.id, seat_id: targetSeatId }),
+        body: JSON.stringify({ participant_id: occupant.id, seat_id: targetSeatId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -154,7 +156,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/rooms/${session.code}/alerts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_token: operatorToken, participant_id: menuTarget.id, message: alertMessage.trim() }),
+        body: JSON.stringify({ participant_id: menuTarget.id, message: alertMessage.trim() }),
       })
       if (!res.ok) throw new Error()
       setMenuTarget(null)
@@ -194,7 +196,8 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     return (
       <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
         <p style={{ color: '#ff6b6b', fontSize: 14 }}>{loadError}</p>
-        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 16 }}>홈으로</button>
+        <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
+        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
       </main>
     )
   }

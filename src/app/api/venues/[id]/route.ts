@@ -13,7 +13,7 @@ const PUBLIC_FIELDS =
   'naver_review_url, google_review_url, kakao_review_url, join_password_enabled'
 
 // 운영자가 수정할 수 있는 필드 화이트리스트. 이 밖의 키는 무시된다
-// (operator_owner_token 탈취 시도, created_at 조작 등 방지).
+// (owner_id 위조 시도, created_at 조작 등 방지).
 const UPDATABLE_FIELDS = [
   'name', 'category', 'address', 'latitude', 'longitude',
   'logo_url', 'hero_image_url', 'primary_color', 'secondary_color',
@@ -22,19 +22,20 @@ const UPDATABLE_FIELDS = [
   'join_password_enabled', 'join_password', 'geofence_radius_m',
 ] as const
 
+// 로그인 세션이 쿠키로 오므로 별도 파라미터 없이도 "본인 소유 매장인지"를 서버가 안다
+// (Operator 도메인, BUSINESS_RULES.md §2.11). 로그인 안 했거나 남의 매장이면 공개
+// 필드만 내려준다 — 존재 여부 자체는 숨기지 않는다(참여자 랜딩 화면도 이 응답을 쓰므로).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { searchParams } = new URL(req.url)
-  const operator_token = searchParams.get('operator_token')
   const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // 운영자 본인 조회면 전체 필드(토큰 제외), 아니면 공개 브랜딩 필드만
-  if (operator_token) {
+  if (user) {
     const { data: venue } = await supabase
       .from('venues')
       .select('*')
       .eq('id', id)
-      .eq('operator_owner_token', operator_token)
+      .eq('owner_id', user.id)
       .maybeSingle()
 
     if (venue) {
@@ -42,7 +43,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       void _t
       return NextResponse.json({ venue: safe, isOwner: true })
     }
-    // 토큰이 틀린 경우에도 존재 여부를 숨기지 않고 공개 필드 조회로 넘어간다
   }
 
   const { data: venue, error } = await supabase
@@ -61,15 +61,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { operator_token } = body
-
-  if (!operator_token) {
-    return NextResponse.json({ error: '운영자 세션이 필요합니다' }, { status: 400 })
-  }
 
   const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
+  }
 
-  const owner = await verifyVenueOwner(supabase, id, operator_token, '설정을 변경할 수 있습니다')
+  const owner = await verifyVenueOwner(supabase, id, user.id, '설정을 변경할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const updatePayload: Record<string, unknown> = {}

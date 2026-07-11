@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSessionToken, storeRoomData } from '@/lib/session'
+import { createClient } from '@/lib/supabase/client'
 import { RoomType, VenueCategory } from '@/lib/supabase/types'
 
 const CATEGORIES: { value: VenueCategory; label: string }[] = [
@@ -32,17 +33,27 @@ export default function CreatePage() {
   // 매장은 "방 만들기"가 아니라 한 번만 등록하고, 이후엔 설정 화면의 "오늘 영업 시작"으로
   // 매일 세션을 연다 (BUSINESS_RULES.md §2.1~2.2 — 고정 QR 모델).
   const [myVenues, setMyVenues] = useState<MyVenue[] | null>(null)
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null)
   const [newVenueName, setNewVenueName] = useState('')
   const [newVenueCategory, setNewVenueCategory] = useState<VenueCategory>('pocha')
 
-  // BUSINESS 탭 첫 진입 시 내 매장 목록을 불러온다
+  // BUSINESS 탭 첫 진입 시 로그인 여부를 먼저 확인하고 내 매장 목록을 불러온다
+  // (Operator 도메인 §2.11 — 매장 목록은 로그인 세션 기준이라, 비로그인이면 빈 목록
+  // 대신 로그인/회원가입 유도 화면을 보여준다).
   useEffect(() => {
     if (roomType !== 'BUSINESS' || myVenues !== null) return
-    const token = getSessionToken()
-    fetch(`/api/venues?operator_token=${encodeURIComponent(token)}`)
-      .then(res => res.json())
-      .then(data => setMyVenues(data.venues ?? []))
-      .catch(() => setMyVenues([]))
+    createClient().auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        setIsAuthed(false)
+        setMyVenues([])
+        return
+      }
+      setIsAuthed(true)
+      fetch('/api/venues')
+        .then(res => res.json())
+        .then(data => setMyVenues(data.venues ?? []))
+        .catch(() => setMyVenues([]))
+    })
   }, [roomType, myVenues])
 
   const handleCreatePersonal = async () => {
@@ -82,7 +93,6 @@ export default function CreatePage() {
         body: JSON.stringify({
           name: newVenueName.trim(),
           category: newVenueCategory,
-          operator_token: getSessionToken(),
         }),
       })
       const data = await res.json()
@@ -133,6 +143,14 @@ export default function CreatePage() {
         <div style={{ flex: 1 }}>
           {myVenues === null ? (
             <p style={{ fontSize: 13, color: 'var(--muted2)' }}>매장 정보를 불러오는 중...</p>
+          ) : isAuthed === false ? (
+            <div style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>매장을 등록하거나 관리하려면 사장님 계정으로 로그인해주세요</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ flex: 1, fontSize: 15 }}>로그인</button>
+                <button className="btn btn-secondary" onClick={() => router.push('/operator/signup')} style={{ flex: 1, fontSize: 15 }}>회원가입</button>
+              </div>
+            </div>
           ) : myVenues.length > 0 ? (
             <>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>내 매장</label>
@@ -194,7 +212,7 @@ export default function CreatePage() {
             </div>
           </div>
 
-          {myVenues !== null && myVenues.length === 0 && (
+          {isAuthed && myVenues !== null && myVenues.length === 0 && (
             <button className="btn btn-primary" onClick={handleRegisterVenue} disabled={loading || !newVenueName.trim()}
               style={{ opacity: loading || !newVenueName.trim() ? 0.5 : 1, fontSize: 17 }}>
               {loading ? '등록 중...' : '🏪 매장 등록하기'}

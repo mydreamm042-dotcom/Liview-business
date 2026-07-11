@@ -17,6 +17,17 @@ export interface Room {
 
 export type VenueCategory = 'bar' | 'pub' | 'pocha' | 'wine_bar' | 'cafe' | 'event_hall' | 'etc'
 
+// 운영자 프로필 (Operator 도메인, BUSINESS_RULES.md §2.11). auth.users(Supabase Auth)와
+// 1:1이며, 비밀번호/세션 자체는 여기 없다 — Supabase Auth가 전담한다.
+export interface Operator {
+  id: string
+  display_name: string | null
+  phone: string | null
+  role: 'owner' | 'manager'
+  created_at: string
+  updated_at: string
+}
+
 // 매장 마스터. 방(세션)이 여러 번 열려도 유지되는 브랜딩/위치/설정의 소유자.
 // operator_owner_token은 절대 클라이언트 응답에 포함하지 않는다 (host_session과 동일 원칙).
 export interface Venue {
@@ -39,6 +50,9 @@ export interface Venue {
   join_password_enabled: boolean
   join_password: string | null
   geofence_radius_m: number
+  // 정식 운영자 인증(Operator 도메인, §2.11). 전환 기간 동안 null일 수 있다 —
+  // operator_owner_token 기반으로 만들어졌지만 아직 "매장 인증 전환"을 안 한 매장.
+  owner_id: string | null
   created_at: string
   updated_at: string
 }

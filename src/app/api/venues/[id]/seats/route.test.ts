@@ -44,46 +44,70 @@ describe('GET /api/venues/[id]/seats', () => {
 })
 
 describe('POST /api/venues/[id]/seats — 좌석 추가', () => {
+  it('로그인 안 했으면 401', async () => {
+    mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([], { user: null }))
+    const { status } = await callPost('v1', { label: '1번' })
+    expect(status).toBe(401)
+  })
+
   it('운영자가 아니면 403', async () => {
     // 소유자 확인과 좌석 개수 조회를 병렬로 보내므로, 소유자가 아니어도 두 쿼리 다 나간다
     // (개수 조회 결과는 버려지고 403으로 응답).
-    const fake = makeFakeSupabase([
-      { data: { id: 'v1', operator_owner_token: 'real-owner' } },
-      { count: 0 },
-    ])
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'real-owner' } },
+        { count: 0 },
+      ],
+      { user: { id: 'impostor' } },
+    )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status } = await callPost('v1', { operator_token: 'impostor', label: '1번' })
+    const { status } = await callPost('v1', { label: '1번' })
     expect(status).toBe(403)
   })
 
   it('소유자면 좌석을 추가하고 다음 순번을 부여한다', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'v1', operator_owner_token: 'op-1' } },
-      { count: 2 }, // 기존 좌석 수
-      { data: { id: 's3', venue_id: 'v1', label: '3번', sort_order: 2 } },
-    ])
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'u1' } },
+        { count: 2 }, // 기존 좌석 수
+        { data: { id: 's3', venue_id: 'v1', label: '3번', sort_order: 2 } },
+      ],
+      { user: { id: 'u1' } },
+    )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status, json } = await callPost('v1', { operator_token: 'op-1', label: '3번' })
+    const { status, json } = await callPost('v1', { label: '3번' })
     expect(status).toBe(200)
     expect(json.seat.sort_order).toBe(2)
   })
 })
 
 describe('DELETE /api/venues/[id]/seats — 좌석 삭제', () => {
+  it('로그인 안 했으면 401', async () => {
+    mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([], { user: null }))
+    const { status } = await callDelete('v1', { seat_id: 's1' })
+    expect(status).toBe(401)
+  })
+
   it('운영자가 아니면 403', async () => {
-    const fake = makeFakeSupabase([{ data: { id: 'v1', operator_owner_token: 'real-owner' } }])
+    const fake = makeFakeSupabase(
+      [{ data: { id: 'v1', owner_id: 'real-owner' } }],
+      { user: { id: 'impostor' } },
+    )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status } = await callDelete('v1', { operator_token: 'impostor', seat_id: 's1' })
+    const { status } = await callDelete('v1', { seat_id: 's1' })
     expect(status).toBe(403)
   })
 
   it('소유자면 좌석을 삭제한다', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'v1', operator_owner_token: 'op-1' } },
-      { data: null, error: null },
-    ])
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'u1' } },
+        { data: null, error: null },
+      ],
+      { user: { id: 'u1' } },
+    )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status, json } = await callDelete('v1', { operator_token: 'op-1', seat_id: 's1' })
+    const { status, json } = await callDelete('v1', { seat_id: 's1' })
     expect(status).toBe(200)
     expect(json.ok).toBe(true)
   })

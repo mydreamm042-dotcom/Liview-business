@@ -58,8 +58,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [password, setPassword] = useState('')
 
   useEffect(() => {
-    const token = getSessionToken()
-    fetch(`/api/venues/${id}?operator_token=${encodeURIComponent(token)}`)
+    fetch(`/api/venues/${id}`)
       .then(res => res.json())
       .then(data => {
         if (!data.venue || !data.isOwner) {
@@ -82,7 +81,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       })
       .catch(() => setLoadError('매장 정보를 불러오지 못했습니다'))
 
-    fetch(`/api/venues/${id}/session?operator_token=${encodeURIComponent(token)}`)
+    fetch(`/api/venues/${id}/session`)
       .then(res => res.json())
       .then(data => setSession(data.session ?? null))
       .catch(() => {})
@@ -92,11 +91,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const handleStartSession = async () => {
     setSessionBusy(true); setSessionError('')
     try {
-      const res = await fetch(`/api/venues/${id}/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_token: getSessionToken() }),
-      })
+      const res = await fetch(`/api/venues/${id}/session`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setSession(data.session)
@@ -111,9 +106,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
     if (!confirm('오늘 영업을 마감할까요? (방 기록은 보존됩니다)')) return
     setSessionBusy(true); setSessionError('')
     try {
-      const res = await fetch(`/api/venues/${id}/session?operator_token=${encodeURIComponent(getSessionToken())}`, {
-        method: 'DELETE',
-      })
+      const res = await fetch(`/api/venues/${id}/session`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setSession(null)
@@ -135,7 +128,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       const res = await fetch(`/api/rooms/${session.code}/operator-join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_token: getSessionToken() }),
+        body: JSON.stringify({ session_token: getSessionToken() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -164,7 +157,6 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operator_token: getSessionToken(),
           name: name.trim(),
           category,
           address: address.trim() || null,
@@ -192,7 +184,8 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
     return (
       <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
         <p style={{ color: '#ff6b6b', fontSize: 14 }}>{loadError}</p>
-        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 16 }}>홈으로</button>
+        <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
+        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
       </main>
     )
   }

@@ -33,30 +33,52 @@ async function callPatch(code: string, body: Record<string, unknown>) {
   return { status: res.status, json: await res.json() }
 }
 
-describe('GET /api/rooms/[code] — 매장 브랜딩 동봉', () => {
-  it('PERSONAL 방은 venue가 null이고 venues 테이블을 조회하지 않는다', async () => {
+describe('GET /api/rooms/[code] — 매장 브랜딩 동봉 + isHost 판정', () => {
+  it('PERSONAL 방은 venue가 null이고 venues 테이블을 조회하지 않으며, session_token 비교로 isHost를 판정한다', async () => {
     const fake = makeFakeSupabase([
       { data: { id: 'r1', host_session: 'h1', room_type: 'PERSONAL', venue_id: null }, error: null },
       { data: [] }, // participants
     ])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status, json } = await callGet('ABC123')
+    const { status, json } = await callGet('ABC123', 'h1')
     expect(status).toBe(200)
     expect(json.venue).toBeNull()
+    expect(json.isHost).toBe(true)
     expect(fake.from).not.toHaveBeenCalledWith('venues')
   })
 
-  it('BUSINESS 방은 매장 브랜딩과 좌석 목록을 함께 반환한다', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'r1', host_session: 'h1', room_type: 'BUSINESS', venue_id: 'v1' }, error: null },
-      { data: [] }, // participants
-      { data: { id: 'v1', name: '별빛포차', primary_color: '#111' } }, // venue
-      { data: [{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }] }, // seats
-    ])
+  it('BUSINESS 방은 매장 브랜딩과 좌석 목록을 함께 반환하고, owner_id는 응답에서 빠진다', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'r1', host_session: 'legacy', room_type: 'BUSINESS', venue_id: 'v1' }, error: null },
+        { data: [] }, // participants
+        { data: { id: 'v1', name: '별빛포차', primary_color: '#111', owner_id: 'u1' } }, // venue
+        { data: [{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }] }, // seats
+      ],
+      { user: { id: 'u1' } },
+    )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { json } = await callGet('ABC123')
     expect(json.venue).toEqual({ id: 'v1', name: '별빛포차', primary_color: '#111' })
     expect(json.seats).toEqual([{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }])
+    expect(json.isHost).toBe(true)
+  })
+
+  it('BUSINESS 방에서 로그인 안 했으면 isHost는 false다 (session_token은 무시)', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'r1', host_session: 'legacy', room_type: 'BUSINESS', venue_id: 'v1' }, error: null },
+        { data: [] },
+        { data: { id: 'v1', name: '별빛포차', owner_id: 'u1' } },
+        { data: [] },
+      ],
+      { user: null },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    // session_token을 'legacy'(host_session과 문자열이 같음)로 보내도 BUSINESS 방은
+    // 더 이상 그 비교를 쓰지 않으므로 isHost가 true가 되면 안 된다.
+    const { json } = await callGet('ABC123', 'legacy')
+    expect(json.isHost).toBe(false)
   })
 })
 
@@ -73,22 +95,39 @@ describe('PATCH /api/rooms/[code] — 마감(closed) 매핑', () => {
     expect(json.room.status).toBe('ended')
   })
 
-  it('BUSINESS 방에 ended를 보내면 서버가 closed로 매핑한다 (클라이언트 수정 불필요)', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'r1', host_session: 'op-1', room_type: 'BUSINESS' } },
-      { data: { id: 'r1', status: 'closed', room_type: 'BUSINESS' } },
-    ])
-    mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { json } = await callPatch('ABC123', { host_session: 'op-1', status: 'ended' })
-    expect(json.room.status).toBe('closed')
-  })
-
-  it('호스트가 아니면 403이고 상태는 바뀌지 않는다', async () => {
+  it('PERSONAL 방은 호스트가 아니면 403이고 상태는 바뀌지 않는다', async () => {
     const fake = makeFakeSupabase([
       { data: { id: 'r1', host_session: 'real-host', room_type: 'PERSONAL' } },
     ])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status } = await callPatch('ABC123', { host_session: 'impostor', status: 'ended' })
+    expect(status).toBe(403)
+  })
+
+  it('BUSINESS 방에 ended를 보내면 서버가 closed로 매핑한다 (로그인 세션으로 소유자 확인)', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'r1', host_session: 'u1', room_type: 'BUSINESS', venue_id: 'v1' } },
+        { data: { owner_id: 'u1' } },
+        { data: { id: 'r1', status: 'closed', room_type: 'BUSINESS' } },
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { json } = await callPatch('ABC123', { status: 'ended' })
+    expect(json.room.status).toBe('closed')
+  })
+
+  it('BUSINESS 방은 로그인 계정이 소유자가 아니면 403', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'r1', host_session: 'u1', room_type: 'BUSINESS', venue_id: 'v1' } },
+        { data: { owner_id: 'u1' } },
+      ],
+      { user: { id: 'impostor' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status } = await callPatch('ABC123', { status: 'ended' })
     expect(status).toBe(403)
   })
 })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { verifyVenueOwner } from '@/lib/server/venueAuth'
+import { requireOperator, verifyVenueOwner } from '@/lib/server/venueAuth'
 
 // 매장 좌석 마스터 목록 (Seating 도메인, BUSINESS_RULES.md §2.8). 세션(오늘 영업)이 몇 번
 // 바뀌어도 유지되는 Venue 소유 데이터라 venue_id 하나로만 관리한다.
@@ -24,18 +24,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 // 좌석 추가. 정렬 순서는 뒤에 이어붙인다 (기존 좌석 수를 세어 다음 순번을 부여).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { operator_token, label } = await req.json()
+  const { label } = await req.json()
 
-  if (!operator_token || !label?.trim()) {
-    return NextResponse.json({ error: '운영자 세션과 좌석 이름이 필요합니다' }, { status: 400 })
+  if (!label?.trim()) {
+    return NextResponse.json({ error: '좌석 이름이 필요합니다' }, { status: 400 })
   }
 
   const supabase = await createServerSupabaseClient()
+  const auth = await requireOperator(supabase)
+  if (!auth.ok) return auth.response
 
   // 소유자 확인과 "기존 좌석 몇 개인지"는 서로 결과를 필요로 하지 않으므로 병렬로 보낸다
   // (직렬로 하면 왕복 시간이 그대로 두 배로 더해짐 — INSERT만 둘 다 끝난 뒤 실행).
   const [owner, countResult] = await Promise.all([
-    verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다'),
+    verifyVenueOwner(supabase, id, auth.user.id, '좌석을 관리할 수 있습니다'),
     supabase.from('venue_seats').select('id', { count: 'exact', head: true }).eq('venue_id', id),
   ])
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
@@ -57,14 +59,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 // 좌석 이름 수정.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { operator_token, seat_id, label } = await req.json()
+  const { seat_id, label } = await req.json()
 
-  if (!operator_token || !seat_id || !label?.trim()) {
-    return NextResponse.json({ error: '운영자 세션, 좌석 id, 좌석 이름이 필요합니다' }, { status: 400 })
+  if (!seat_id || !label?.trim()) {
+    return NextResponse.json({ error: '좌석 id와 좌석 이름이 필요합니다' }, { status: 400 })
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
+  const auth = await requireOperator(supabase)
+  if (!auth.ok) return auth.response
+
+  const owner = await verifyVenueOwner(supabase, id, auth.user.id, '좌석을 관리할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const { data: seat, error } = await supabase
@@ -86,14 +91,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // 좌석 미배정 상태로 돌아간다 (강퇴되지 않음).
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { operator_token, seat_id } = await req.json()
+  const { seat_id } = await req.json()
 
-  if (!operator_token || !seat_id) {
-    return NextResponse.json({ error: '운영자 세션과 좌석 id가 필요합니다' }, { status: 400 })
+  if (!seat_id) {
+    return NextResponse.json({ error: '좌석 id가 필요합니다' }, { status: 400 })
   }
 
   const supabase = await createServerSupabaseClient()
-  const owner = await verifyVenueOwner(supabase, id, operator_token, '좌석을 관리할 수 있습니다')
+  const auth = await requireOperator(supabase)
+  if (!auth.ok) return auth.response
+
+  const owner = await verifyVenueOwner(supabase, id, auth.user.id, '좌석을 관리할 수 있습니다')
   if (!owner.ok) return NextResponse.json({ error: owner.error }, { status: owner.status })
 
   const { error } = await supabase

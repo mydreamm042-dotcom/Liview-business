@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireOperator } from '@/lib/server/venueAuth'
 
 // 운영자의 좌석 강제 이동 (Seating 도메인, BUSINESS_RULES.md §2.8). 참여자 화면은 3초
 // 폴링으로 참여자 목록을 다시 받아오므로, 새 realtime 채널 없이도 곧 반영된다.
@@ -8,24 +9,35 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 // 다르게 확정되면 이 한 줄만 바꾸면 되도록 리셋 시점을 이 update 한 곳에 모아뒀다.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
-  const { operator_token, participant_id, seat_id } = await req.json()
+  const { participant_id, seat_id } = await req.json()
 
-  if (!operator_token || !participant_id || !seat_id) {
-    return NextResponse.json({ error: '운영자 세션, 참여자, 좌석 id가 필요합니다' }, { status: 400 })
+  if (!participant_id || !seat_id) {
+    return NextResponse.json({ error: '참여자, 좌석 id가 필요합니다' }, { status: 400 })
   }
 
   const supabase = await createServerSupabaseClient()
+  const auth = await requireOperator(supabase)
+  if (!auth.ok) return auth.response
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, venue_id, host_session')
+    .select('id, venue_id')
     .eq('code', code.toUpperCase())
     .maybeSingle()
 
   if (!room) {
     return NextResponse.json({ error: '방을 찾을 수 없습니다' }, { status: 404 })
   }
-  if (room.host_session !== operator_token) {
+
+  // 권한 판정은 로그인 계정이 이 방이 속한 매장의 owner_id인지로 한다
+  // (Operator 도메인 §2.11 전환 — host_session 문자열 비교는 더 이상 쓰지 않는다).
+  const { data: venue } = await supabase
+    .from('venues')
+    .select('owner_id')
+    .eq('id', room.venue_id)
+    .maybeSingle()
+
+  if (venue?.owner_id !== auth.user.id) {
     return NextResponse.json({ error: '운영자만 좌석을 옮길 수 있습니다' }, { status: 403 })
   }
 
