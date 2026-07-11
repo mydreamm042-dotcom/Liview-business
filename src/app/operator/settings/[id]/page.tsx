@@ -36,8 +36,9 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [saveError, setSaveError] = useState('')
 
-  // 편집 필드
-  const [name, setName] = useState('')
+  // 편집 필드 — 매장 이름(name)은 편집 대상이 아니다 (BUSINESS_RULES.md §2.2 "매장명 변경
+  // 금지" — 등록 후 고정, 향후 매장 실재 검증의 판정 근거가 된다). 세션(오늘 영업) 이름은
+  // 아래 roomNameInput으로 별도 관리한다.
   const [category, setCategory] = useState<VenueCategory>('etc')
   const [address, setAddress] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
@@ -67,7 +68,6 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         }
         const v: Venue = data.venue
         setVenue(v)
-        setName(v.name ?? '')
         setCategory(v.category ?? 'etc')
         setAddress(v.address ?? '')
         setLogoUrl(v.logo_url ?? '')
@@ -117,6 +117,37 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
     }
   }
 
+  // 오늘 세션(오늘 영업) 이름 변경 — 매장 이름과 달리 그날그날 자유롭게 바꿀 수 있다
+  // (BUSINESS_RULES.md §2.2 "매장명 변경 금지" 대신 도입된 대안).
+  const [roomNameInput, setRoomNameInput] = useState('')
+  const [roomNameSaving, setRoomNameSaving] = useState(false)
+  const [roomNameSavedAt, setRoomNameSavedAt] = useState<number | null>(null)
+  const [roomNameError, setRoomNameError] = useState('')
+
+  useEffect(() => {
+    setRoomNameInput(session?.name ?? '')
+  }, [session?.name])
+
+  const handleSaveRoomName = async () => {
+    if (!session?.code || !roomNameInput.trim()) return
+    setRoomNameSaving(true); setRoomNameError(''); setRoomNameSavedAt(null)
+    try {
+      const res = await fetch(`/api/rooms/${session.code}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: roomNameInput.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSession(prev => (prev ? { ...prev, name: data.room.name } : prev))
+      setRoomNameSavedAt(Date.now())
+    } catch (e) {
+      setRoomNameError(e instanceof Error ? e.message : '이름 변경에 실패했습니다')
+    } finally {
+      setRoomNameSaving(false)
+    }
+  }
+
   // 운영자가 손님과 같은 방 화면(반응/HOT/채팅/자리배치)을 그대로 보고 싶을 때 쓴다.
   // 비밀번호/위치 검사 없이 host_session 일치만으로 "사장님" 닉네임 참여자로 등록된다.
   const [enteringRoom, setEnteringRoom] = useState(false)
@@ -145,7 +176,6 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   }
 
   const handleSave = async () => {
-    if (!name.trim()) return
     setSaveError('')
     if (passwordEnabled && !password.trim()) {
       setSaveError('입장 비밀번호를 켰다면 비밀번호를 입력해주세요')
@@ -157,7 +187,6 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(),
           category,
           address: address.trim() || null,
           logo_url: logoUrl.trim() || null,
@@ -223,11 +252,11 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           <img src={logoUrl} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />
         ) : (
           <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', background: primaryColor }}>
-            {(name || venue.name)[0] ?? '🏪'}
+            {venue.name[0] ?? '🏪'}
           </div>
         )}
         <div>
-          <p style={{ fontSize: 16, fontWeight: 800 }}>{name || '매장 이름'}</p>
+          <p style={{ fontSize: 16, fontWeight: 800 }}>{venue.name}</p>
           <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>손님에게 이렇게 보여요</p>
         </div>
       </div>
@@ -244,9 +273,26 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
             {!sessionLoaded ? '확인 중...' : isOpen ? '영업 중' : '영업 전'}
           </span>
         </div>
-        <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 14 }}>
-          {isOpen ? `${session?.name} · 손님이 QR로 바로 입장할 수 있어요` : '오늘 영업을 시작하면 QR로 손님이 입장할 수 있어요'}
+        <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: isOpen ? 10 : 14 }}>
+          {isOpen ? '손님이 QR로 바로 입장할 수 있어요' : '오늘 영업을 시작하면 QR로 손님이 입장할 수 있어요'}
         </p>
+        {isOpen && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>오늘 세션 이름</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" value={roomNameInput} onChange={e => setRoomNameInput(e.target.value)} maxLength={40} style={{ flex: 1 }} />
+              <button
+                className="btn btn-secondary"
+                onClick={handleSaveRoomName}
+                disabled={roomNameSaving || !roomNameInput.trim() || roomNameInput.trim() === session?.name}
+                style={{ minHeight: 'auto', padding: '0 14px', opacity: roomNameSaving || !roomNameInput.trim() || roomNameInput.trim() === session?.name ? 0.5 : 1 }}>
+                {roomNameSaving ? '저장 중...' : '변경'}
+              </button>
+            </div>
+            {roomNameError && <p style={{ fontSize: 11, color: '#ff6b6b', marginTop: 6 }}>{roomNameError}</p>}
+            {roomNameSavedAt && <p style={{ fontSize: 11, color: '#10b981', marginTop: 6 }}>✓ 변경되었습니다</p>}
+          </div>
+        )}
         {sessionError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>{sessionError}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -318,7 +364,10 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
 
       <div style={section}>
         <label style={label}>매장 이름</label>
-        <input className="input" value={name} onChange={e => setName(e.target.value)} maxLength={30} placeholder="예: 별빛포차 강남점" />
+        <div className="card-sm" style={{ padding: '12px 14px', fontSize: 14, fontWeight: 700 }}>{venue.name}</div>
+        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+          등록 후에는 매장 이름을 바꿀 수 없어요. 오늘만 다르게 보이고 싶다면 위 영업 상태의 &quot;오늘 세션 이름&quot;을 바꿔주세요
+        </p>
       </div>
 
       <div style={section}>
@@ -388,8 +437,8 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
         {saveError && <p style={{ fontSize: 12, color: '#ff6b6b', textAlign: 'center', marginBottom: 8 }}>{saveError}</p>}
         {savedAt && <p style={{ fontSize: 12, color: '#10b981', textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</p>}
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving || !name.trim()}
-          style={{ fontSize: 16, opacity: saving || !name.trim() ? 0.5 : 1 }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+          style={{ fontSize: 16, opacity: saving ? 0.5 : 1 }}>
           {saving ? '저장 중...' : '설정 저장'}
         </button>
       </div>

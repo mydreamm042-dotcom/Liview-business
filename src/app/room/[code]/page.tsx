@@ -11,13 +11,19 @@ import HeartToast, { showToast } from '@/components/HeartToast'
 import QRCodeDisplay from '@/components/QRCodeDisplay'
 import ChatPanel from '@/components/ChatPanel'
 import BrandHeader from '@/components/BrandHeader'
+import SeatMap from '@/components/SeatMap'
+import SeatBoxContent from '@/components/SeatBoxContent'
+import { Participant } from '@/lib/supabase/types'
 import { simulateHotTaps, hotIndexAt, HOT_HOLD_MS, HOT_TOTAL_MS } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS } from '@/lib/cooldown'
-import { fmtSeatElapsed, isOccupantHot } from '@/lib/seatDisplay'
+import { isOccupantHot } from '@/lib/seatDisplay'
 
 function fmtCd(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 }
+
+const LONG_PRESS_MS = 2000
+const SEAT_CANVAS_HEIGHT = 300
 
 export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params)
@@ -104,6 +110,83 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     } finally {
       setAcknowledgingAlert(false)
     }
+  }
+
+  // 운영자의 손님 케어 액션(경고 메시지 + 좌석 강제 이동) — 예전엔 별도의 운영자 전용
+  // 관리 화면에서 트리거했지만, 운영자가 이미 보고 있는 이 방 화면의 자리배치도로
+  // 옮겼다(BUSINESS_RULES.md §2.9 "트리거 화면 위치"). state.isHost가 아니면 전혀
+  // 쓰이지 않는다 — 아래 렌더링에서도 호스트에게만 이 핸들러들을 연결한다.
+  const [armedSeatId, setArmedSeatId] = useState<string | null>(null)
+  const [menuTarget, setMenuTarget] = useState<Participant | null>(null)
+  const [careMessage, setCareMessage] = useState('')
+  const [sendingCareMessage, setSendingCareMessage] = useState(false)
+  const [careError, setCareError] = useState('')
+  // 눌린 좌석과 시작 시각만 기록해두고, "2초 이상 눌렀는지"는 뗄 때(pointerUp) 딱 한 번만
+  // 판정한다 — setTimeout으로 누르는 도중 상태를 바꾸면 그 직후 pointerUp이 "방금 무장된
+  // 좌석을 다시 탭한 것"으로 해석돼 무장이 같은 제스처 안에서 바로 풀려버리는 문제가 있었다.
+  const pressStartRef = useRef<{ seatId: string; startedAt: number } | null>(null)
+
+  const handleSeatMove = useCallback(async (targetSeatId: string) => {
+    if (!armedSeatId) return
+    const occupant = state.participants.find(p => p.seat_id === armedSeatId)
+    setArmedSeatId(null)
+    if (!occupant) return
+    try {
+      const res = await fetch(`/api/rooms/${code}/seats`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant_id: occupant.id, seat_id: targetSeatId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      // participants의 seat_id 변경은 useRoom의 realtime 구독(UPDATE)이 자동 반영하므로
+      // 여기서 별도로 다시 조회할 필요가 없다.
+    } catch (e) {
+      setCareError(e instanceof Error ? e.message : '좌석 이동에 실패했습니다')
+    }
+  }, [armedSeatId, state.participants, code])
+
+  const handleSendCareMessage = async () => {
+    if (!menuTarget || !careMessage.trim()) return
+    setSendingCareMessage(true)
+    try {
+      const res = await fetch(`/api/rooms/${code}/alerts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant_id: menuTarget.id, message: careMessage.trim() }),
+      })
+      if (!res.ok) throw new Error()
+      setMenuTarget(null)
+      setCareMessage('')
+    } catch {
+      setCareError('메시지 전송에 실패했습니다')
+    } finally {
+      setSendingCareMessage(false)
+    }
+  }
+
+  const startSeatPress = (seatId: string, occupant: Participant | undefined) => {
+    if (!occupant) return
+    pressStartRef.current = { seatId, startedAt: Date.now() }
+  }
+  const cancelSeatPress = () => { pressStartRef.current = null }
+
+  // 이미 무장된 상태의 탭은 "이동 완료/취소"고, 무장 안 된 상태의 탭은 눌린 시간에 따라
+  // "무장 시작"(2초 이상) 또는 "손님 케어 메뉴"(짧게)로 갈린다.
+  const handleSeatRelease = (seatId: string, occupant: Participant | undefined) => {
+    if (armedSeatId) {
+      if (armedSeatId !== seatId) handleSeatMove(seatId)
+      else setArmedSeatId(null)
+      pressStartRef.current = null
+      return
+    }
+    const press = pressStartRef.current
+    pressStartRef.current = null
+    if (press?.seatId === seatId && Date.now() - press.startedAt >= LONG_PRESS_MS) {
+      if (occupant) setArmedSeatId(seatId)
+      return
+    }
+    if (occupant) setMenuTarget(occupant)
   }
 
   // 채팅창이 닫혀 있어도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
@@ -444,40 +527,67 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
       {/* BUSINESS 방 + 좌석 설정이 있는 매장이면, 방 화면에서도 자리배치도가 계속 보인다
           (Seating 도메인, BUSINESS_RULES.md §2.8) — 입장 시 한 번 고르고 끝나는 게 아니라
-          누가 어느 좌석인지, HOT 여부, 착석 시간을 방 화면에서도 확인할 수 있어야 한다. */}
+          누가 어느 좌석인지, HOT 여부, 착석 시간을 방 화면에서도 확인할 수 있어야 한다.
+          운영자(호스트)에게는 여기서 바로 손님 케어 액션(경고 메시지/좌석 이동)이 트리거된다
+          (§2.9 "트리거 화면 위치") — 좌석을 2초 길게 누르면 이동 모드, 짧게 누르면 메시지 메뉴. */}
       {state.venue && state.seats.length > 0 && (
         <div style={{ padding: '0 20px', marginBottom: 16 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>자리배치도</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {state.seats.map(seat => {
-              const occupant = state.participants.find(p => p.seat_id === seat.id)
-              const isMe = occupant?.id === roomData.participantId
-              const occupantHot = occupant
-                ? isOccupantHot(occupant.id, state.reactions.filter(r => r.type === 'hot'), Date.now())
-                : false
-              return (
-                <div key={seat.id} className="card" style={{
-                  padding: '12px 14px',
-                  borderColor: isMe ? 'rgba(255,107,107,0.25)' : undefined,
-                  background: isMe ? 'rgba(255,107,107,0.05)' : undefined,
-                }}>
-                  <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{seat.label}</p>
-                  {occupant ? (
-                    <div>
-                      <p style={{ fontSize: 12, color: isMe ? 'var(--accent)' : 'var(--text2)' }}>
-                        {occupant.nickname}{isMe ? ' (나)' : ''} {occupantHot && '🔥'}
-                      </p>
-                      {occupant.seat_assigned_at && (
-                        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtSeatElapsed(occupant.seat_assigned_at, Date.now())}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p style={{ fontSize: 12, color: 'var(--muted2)' }}>빈 자리</p>
-                  )}
+          {state.isHost ? (
+            <>
+              {armedSeatId && (
+                <div className="card-sm" style={{ padding: '10px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>이동할 좌석을 선택하세요</span>
+                  <button onClick={() => setArmedSeatId(null)} style={{ fontSize: 12, color: 'var(--muted2)', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
                 </div>
-              )
-            })}
-          </div>
+              )}
+              {careError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8 }}>{careError}</p>}
+              <div style={{ position: 'relative', width: '100%', height: SEAT_CANVAS_HEIGHT, borderRadius: 16, background: 'var(--card2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                {state.seats.map(seat => {
+                  const occupant = state.participants.find(p => p.seat_id === seat.id)
+                  const isMe = occupant?.id === roomData.participantId
+                  const occupantHot = occupant
+                    ? isOccupantHot(occupant.id, state.reactions.filter(r => r.type === 'hot'), Date.now())
+                    : false
+                  return (
+                    <div
+                      key={seat.id}
+                      className="card"
+                      onPointerDown={() => startSeatPress(seat.id, occupant)}
+                      onPointerUp={() => handleSeatRelease(seat.id, occupant)}
+                      onPointerLeave={cancelSeatPress}
+                      onContextMenu={e => { e.preventDefault(); if (occupant) setMenuTarget(occupant) }}
+                      style={{
+                        position: 'absolute',
+                        left: `${seat.position_x}%`,
+                        top: `${seat.position_y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: 92,
+                        padding: '10px 12px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        touchAction: 'none',
+                        border: armedSeatId === seat.id ? '2px solid var(--accent)' : (isMe ? '1.5px solid rgba(255,107,107,0.3)' : '1px solid var(--border)'),
+                        background: isMe ? 'rgba(255,107,107,0.06)' : undefined,
+                      }}
+                    >
+                      <SeatBoxContent seat={seat} occupant={occupant} occupantHot={occupantHot} now={Date.now()} isMe={isMe} />
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <SeatMap
+              seats={state.seats}
+              participants={state.participants}
+              hotReactions={state.reactions.filter(r => r.type === 'hot')}
+              now={Date.now()}
+              myParticipantId={roomData.participantId}
+              height={SEAT_CANVAS_HEIGHT}
+            />
+          )}
         </div>
       )}
 
@@ -569,6 +679,31 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             <button onClick={handleAcknowledgeAlert} disabled={acknowledgingAlert} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48, opacity: acknowledgingAlert ? 0.6 : 1 }}>
               {acknowledgingAlert ? '처리 중...' : '확인'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 운영자가 손님에게 보내는 경고 메시지 작성 모달 (Guest Care 도메인, §2.9) —
+          자리배치도에서 좌석을 짧게 눌러/우클릭해 연다. state.isHost가 아니면 절대 열리지 않는다. */}
+      {menuTarget && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div className="card" style={{ padding: 20, width: '100%', maxWidth: 380 }}>
+            <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{menuTarget.nickname}님에게 메시지 보내기</p>
+            <textarea
+              value={careMessage}
+              onChange={e => setCareMessage(e.target.value)}
+              placeholder="예: 목소리를 조금만 낮춰주세요"
+              maxLength={200}
+              rows={3}
+              className="input"
+              style={{ width: '100%', resize: 'none', marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => { setMenuTarget(null); setCareMessage('') }} style={{ flex: 1 }}>취소</button>
+              <button className="btn btn-primary" onClick={handleSendCareMessage} disabled={sendingCareMessage || !careMessage.trim()} style={{ flex: 1, opacity: sendingCareMessage || !careMessage.trim() ? 0.5 : 1 }}>
+                {sendingCareMessage ? '전송 중...' : '보내기'}
+              </button>
+            </div>
           </div>
         </div>
       )}

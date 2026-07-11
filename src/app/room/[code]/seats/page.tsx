@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
 import { Participant, VenueSeat, Reaction, VenueBranding } from '@/lib/supabase/types'
-import { fmtSeatElapsed, isOccupantHot } from '@/lib/seatDisplay'
 import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
+import SeatMap from '@/components/SeatMap'
 
 // 참여자용 자리배치도 — BUSINESS 방은 좌석 선택이 필수다 (BUSINESS_RULES.md §2.8).
 // 매장에 등록된 좌석이 하나도 없으면(운영자 미설정) 게이트를 걸지 않고 방으로 바로 보낸다.
@@ -138,43 +138,17 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
 
       {error && <p style={{ fontSize: 13, color: '#ff6b6b', marginBottom: 16 }}>{error}</p>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {seats.map(seat => {
-          const occupant = participants.find(p => p.seat_id === seat.id)
-          const occupantHot = occupant ? isOccupantHot(occupant.id, hotReactions, now) : false
-          const isEmpty = !occupant
-
-          return (
-            <button
-              key={seat.id}
-              disabled={!isEmpty || selectingSeatId === seat.id}
-              onClick={() => handleSelect(seat.id)}
-              className="card"
-              style={{
-                padding: 16, textAlign: 'left', cursor: isEmpty ? 'pointer' : 'not-allowed',
-                opacity: isEmpty ? 1 : 0.6,
-                border: isEmpty ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-              }}
-            >
-              <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{seat.label}</p>
-              {isEmpty ? (
-                <p style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>
-                  {selectingSeatId === seat.id ? '선택 중...' : '빈 자리 · 선택하기'}
-                </p>
-              ) : (
-                <div>
-                  <p style={{ fontSize: 12, color: 'var(--muted2)' }}>
-                    {occupant!.nickname} {occupantHot && '🔥'}
-                  </p>
-                  {occupant!.seat_assigned_at && (
-                    <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{fmtSeatElapsed(occupant!.seat_assigned_at, now)}</p>
-                  )}
-                </div>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      {/* 운영자가 배치한 실제 좌표로 렌더링한다 (Seating 도메인, BUSINESS_RULES.md §2.8
+          "좌석 배치 자유 구성") — 빈 좌석만 선택 가능하고, 선택 중인 좌석은 잠시 비활성화된다. */}
+      <SeatMap
+        seats={seats}
+        participants={participants}
+        hotReactions={hotReactions}
+        now={now}
+        height={360}
+        onSeatClick={seat => handleSelect(seat.id)}
+        seatDisabled={(seat, occupant) => !!occupant || selectingSeatId === seat.id}
+      />
     </main>
   )
 }

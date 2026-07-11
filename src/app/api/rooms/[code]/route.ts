@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
     const { data: seatData } = await supabase
       .from('venue_seats')
-      .select('id, venue_id, label, sort_order, created_at')
+      .select('id, venue_id, label, sort_order, position_x, position_y, created_at')
       .eq('venue_id', room.venue_id)
       .order('sort_order', { ascending: true })
     seats = seatData ?? []
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
-  const { host_session, status } = await req.json()
+  const { host_session, status, name } = await req.json()
   const supabase = await createServerSupabaseClient()
 
   const { data: room } = await supabase
@@ -102,21 +102,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
       .maybeSingle()
 
     if (!user || venue?.owner_id !== user.id) {
-      return NextResponse.json({ error: '운영자만 방을 종료할 수 있습니다' }, { status: 403 })
+      return NextResponse.json({ error: '운영자만 이 방을 변경할 수 있습니다' }, { status: 403 })
     }
   } else if (room.host_session !== host_session) {
     // PERSONAL 방은 기존 그대로 — 익명 host_session 문자열 비교.
-    return NextResponse.json({ error: '호스트만 방을 종료할 수 있습니다' }, { status: 403 })
+    return NextResponse.json({ error: '호스트만 이 방을 변경할 수 있습니다' }, { status: 403 })
   }
 
-  // BUSINESS 방은 "종료(ended)"가 아니라 "마감(closed)"으로 전이한다. closed 방은
-  // cleanup 삭제 대상이 아니어서 매장 이력으로 영구 보존된다 (BUSINESS_RULES 2.1).
-  // 기존 UI가 보내는 status='ended'를 서버가 매핑하므로 클라이언트 수정 없이도 규칙이 지켜진다.
-  const resolvedStatus = room.room_type === 'BUSINESS' && status === 'ended' ? 'closed' : status
+  const updatePayload: Record<string, unknown> = {}
 
-  const updatePayload: Record<string, unknown> = { status: resolvedStatus }
-  if (resolvedStatus === 'ended' || resolvedStatus === 'closed') {
-    updatePayload.ended_at = new Date().toISOString()
+  // 세션(오늘 영업) 표시 이름 변경 — 매장명(venues.name)과 달리 그날그날 자유롭게 바꿀 수
+  // 있다 (BUSINESS_RULES.md §2.2 "매장명 변경 금지"). status와 독립적으로 보낼 수 있다.
+  if (typeof name === 'string') {
+    if (!name.trim()) {
+      return NextResponse.json({ error: '방 이름이 필요합니다' }, { status: 400 })
+    }
+    updatePayload.name = name.trim()
+  }
+
+  if (status) {
+    // BUSINESS 방은 "종료(ended)"가 아니라 "마감(closed)"으로 전이한다. closed 방은
+    // cleanup 삭제 대상이 아니어서 매장 이력으로 영구 보존된다 (BUSINESS_RULES 2.1).
+    // 기존 UI가 보내는 status='ended'를 서버가 매핑하므로 클라이언트 수정 없이도 규칙이 지켜진다.
+    const resolvedStatus = room.room_type === 'BUSINESS' && status === 'ended' ? 'closed' : status
+    updatePayload.status = resolvedStatus
+    if (resolvedStatus === 'ended' || resolvedStatus === 'closed') {
+      updatePayload.ended_at = new Date().toISOString()
+    }
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json({ error: '변경할 항목이 없습니다' }, { status: 400 })
   }
 
   const { data: updated, error } = await supabase

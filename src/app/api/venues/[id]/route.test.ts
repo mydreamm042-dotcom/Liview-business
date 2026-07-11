@@ -85,20 +85,22 @@ describe('PATCH /api/venues/[id] — 소유자 검증 + 필드 화이트리스�
     expect(status).toBe(403)
   })
 
-  it('화이트리스트에 없는 필드(operator_owner_token 등)는 무시된다', async () => {
+  it('화이트리스트에 없는 필드(operator_owner_token, name 등)는 무시된다', async () => {
     const fake = makeFakeSupabase(
       [
         { data: { id: 'v1', owner_id: 'u1' } },
-        { data: { id: 'v1', name: '새이름', operator_owner_token: 'op-1' } },
+        { data: { id: 'v1', name: '기존이름', address: '새주소', operator_owner_token: 'op-1' } },
       ],
       { user: { id: 'u1' } },
     )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status, json } = await callPatch('v1', {
-      name: '새이름',
+      address: '새주소',
+      name: '해킹당한이름', // 화이트리스트 밖(매장명 변경 금지, §2.2) — 무시돼야 함
       operator_owner_token: 'STOLEN', // 화이트리스트 밖 — 무시돼야 함
     })
     expect(status).toBe(200)
     expect(json.venue.operator_owner_token).toBeUndefined()
+    expect(json.venue.name).toBe('기존이름')
   })
 })

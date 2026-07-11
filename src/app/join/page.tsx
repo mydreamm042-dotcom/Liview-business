@@ -37,6 +37,12 @@ function JoinContent() {
       const res = await fetch(`/api/rooms/${code}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      // BUSINESS 방은 코드 입장 자체를 서버가 거부한다(고정 QR 전용, BUSINESS_RULES.md §2.1) —
+      // 닉네임 입력까지 갔다가 마지막에 막히는 대신 여기서 바로 안내한다.
+      if (data.room.room_type === 'BUSINESS') {
+        setError('이 매장은 매장에 비치된 QR로만 입장할 수 있어요')
+        return
+      }
       setRoomName(data.room.name)
       setStep('nickname')
     } catch (e) {

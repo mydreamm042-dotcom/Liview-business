@@ -85,11 +85,14 @@ export interface Participant {
 }
 
 // 매장 좌석 마스터 (Seating 도메인). 세션(오늘 영업)이 바뀌어도 유지되는 Venue 소유 데이터.
+// position_x/position_y: 자리배치도 캔버스 대비 0~100 퍼센트 좌표 (§2.8 "좌석 배치 자유 구성").
 export interface VenueSeat {
   id: string
   venue_id: string
   label: string
   sort_order: number
+  position_x: number
+  position_y: number
   created_at: string
 }
 

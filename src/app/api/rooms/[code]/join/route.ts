@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { joinOrReviveParticipant } from '@/lib/server/joinParticipant'
 
+// 이 경로는 참여자가 방 코드를 직접 입력해 들어오는 PERSONAL 전용 입장이다(Part 1, 변경 금지).
+// BUSINESS 방은 코드를 참여자에게 요구/노출하지 않는 고정 QR 입장만 허용한다
+// (BUSINESS_RULES.md §2.1 "고정 QR 입장"). 코드로 여기 직접 들어오면 그 전용 입장이
+// 강제하는 입장 비밀번호·위치 반경 검사(§2.2~2.3)를 전부 우회하게 되므로 여기서 막는다 —
+// 참여자는 반드시 `/v/[venueId]` 경로로 들어와야 한다.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
   const { nickname, session_token } = await req.json()
@@ -20,6 +25,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
 
   if (!room) {
     return NextResponse.json({ error: '방을 찾을 수 없습니다' }, { status: 404 })
+  }
+
+  if (room.room_type === 'BUSINESS') {
+    return NextResponse.json({ error: '이 매장은 매장에 비치된 QR로만 입장할 수 있어요' }, { status: 400 })
   }
 
   // ended(PERSONAL 종료)와 closed(BUSINESS 마감) 모두 입장 불가.

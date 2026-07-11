@@ -13,9 +13,11 @@ const PUBLIC_FIELDS =
   'naver_review_url, google_review_url, kakao_review_url, join_password_enabled'
 
 // 운영자가 수정할 수 있는 필드 화이트리스트. 이 밖의 키는 무시된다
-// (owner_id 위조 시도, created_at 조작 등 방지).
+// (owner_id 위조 시도, created_at 조작 등 방지). name은 의도적으로 제외한다 —
+// 등록 이후 매장명은 변경 불가(BUSINESS_RULES.md §2.2 "매장명 변경 금지") —
+// 향후 매장 실재 검증 시스템이 이 이름을 근거로 판정할 예정이기 때문이다.
 const UPDATABLE_FIELDS = [
-  'name', 'category', 'address', 'latitude', 'longitude',
+  'category', 'address', 'latitude', 'longitude',
   'logo_url', 'hero_image_url', 'primary_color', 'secondary_color',
   'naver_review_url', 'google_review_url', 'kakao_review_url',
   'public_chat_enabled',
