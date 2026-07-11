@@ -43,6 +43,7 @@
 | **2** | Room Configuration — 매장 브랜딩, 운영자 설정 화면 | ✅ 완료 (main 병합) |
 | **3** | Liview 홈 — 지도 진입점 + 실시간 탐색 (Discovery + Public Transparency MVP) | ✅ 완료 (배포 확인됨) |
 | **4** | 좌석 배치 & 좌석 선택 + 운영자 좌석 이동 + 손님 케어(경고 메시지) MVP | ✅ 완료 (쿠폰 지급은 별도 Phase로 연기) |
+| **4.5 (신규 삽입)** | **운영자 정식 회원가입/로그인** — `operator_owner_token` 임시 인증을 Supabase Auth + `operators`/`venues.owner_id`로 전환 | 진행 중 |
 | 5 | 운영자 대시보드 | 대기 |
 | 6 (Staff 추가안 통합) | 이벤트 타임라인 + 직원 교대/친절도 평가 | 대기 |
 | 7 (Review 추가안 통합) | 리뷰 유도 + 검증 리뷰(venue_reviews) | 대기 |
@@ -127,9 +128,34 @@
 
 ---
 
+## Phase 4.5 상세 — 운영자 정식 회원가입/로그인
+
+### 왜 예외적으로 지금 삽입하는가
+Phase 1.5와 같은 이유다 — 새 기능이 아니라, `operator_owner_token`(브라우저 임의 토큰)으로 운영자 신원을 대신해온 임시 방식이 실제 정식 출시 조건(계정 복구, 프랜차이즈형 다중 매장, 향후 소셜 로그인)과 안 맞는다는 걸 사용자가 직접 지적해 바로잡는 것 (`CHANGE_INTAKE_PROCESS.md` 예외 규정).
+
+### 스코프
+1. `operators` 테이블 — `auth.users`(Supabase Auth) 1:1 프로필. 비밀번호 해시/세션은 Supabase Auth에 위임하고 이 테이블은 표시 이름/연락처/역할만 갖는다
+2. `venues.owner_id` FK 추가 (nullable, `operator_owner_token`은 전환 기간 동안 유지)
+3. 이메일+비밀번호 회원가입/로그인 화면 (`/operator/signup`, `/operator/login`)
+4. 기존 `operator_owner_token` 매장을 로그인 계정에 연결하는 "매장 인증 전환" 1회성 플로우
+5. 운영자 관련 API 라우트 전부를 `operator_token` 파라미터 방식에서 Supabase Auth 세션(`auth.uid()`) 기반으로 전환
+6. BUSINESS 방의 `isHost` 판정을 `venues.owner_id = auth.uid()` 기준으로 재구성 (PERSONAL 방의 `host_session` 판정은 그대로 유지)
+
+### 확정
+- 인증 수단은 **Supabase Auth** (자체 비밀번호 해시 테이블 대신) — 이유: 향후 구글/카카오 로그인을 붙일 계획이 있고 Supabase가 둘 다 기본 지원하므로 재작업이 없음
+- `operator_owner_token` 컬럼은 즉시 삭제하지 않고 전환 기간 동안 유지
+- PERSONAL 방의 `host_session`(익명 세션)은 이 리팩토링과 무관, 변경 없음
+
+### 미확정
+- 이메일 인증(확인 메일) 필수 여부 — 데모/테스트 단계에서는 편의상 꺼둘 수 있음 (Supabase 대시보드 설정)
+- 한 매장에 여러 운영자(공동 운영)를 붙이는 기능 — 지금은 1(운영자):N(매장)만 지원, 다대다가 필요해지면 별도 조인 테이블로 확장
+
+---
+
 ## 다음 단계
 1. Phase 1.5, Phase 4(쿠폰 제외) 구현 완료
 2. Phase 1.5의 남은 미확정 항목 확인 (위치 검사 주기, 비밀번호 재시도 제한 등)
 3. Phase 4 미확정 항목(좌석 이동 시 타이머 리셋 여부 등) 확인
 4. 쿠폰 지급 사양 확정되면 별도 Phase로 진행
+5. Phase 4.5(운영자 정식 인증) 구현 진행 중
 5. Phase 5(운영자 대시보드) 착수
