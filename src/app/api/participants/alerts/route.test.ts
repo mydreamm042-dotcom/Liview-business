@@ -57,30 +57,26 @@ describe('GET /api/participants/alerts', () => {
   })
 })
 
-describe('PATCH /api/participants/alerts — 확인 처리', () => {
-  it('참여자를 찾을 수 없으면 404', async () => {
-    const fake = makeFakeSupabase([{ data: null }])
+// acknowledge_operator_alert RPC 하나로 "세션 검증 + 확인 처리"를 원자적으로 묶는다
+// (참여자 확인 + 별도 업데이트 두 왕복이던 것을 한 왕복으로 줄인 성능 수정).
+describe('PATCH /api/participants/alerts — 확인 처리 (RPC)', () => {
+  it('참여자를 찾을 수 없으면(세션 불일치) 404', async () => {
+    const fake = makeFakeSupabase([{ data: { ok: false, error: 'participant_not_found' } }])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status } = await callPatch({ alert_id: 'a1', participant_id: 'p1', session_token: 's1' })
     expect(status).toBe(404)
   })
 
   it('확인 처리에 성공한다', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'p1' } },
-      { data: { id: 'a1' }, error: null },
-    ])
+    const fake = makeFakeSupabase([{ data: { ok: true, id: 'a1' } }])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status, json } = await callPatch({ alert_id: 'a1', participant_id: 'p1', session_token: 's1' })
     expect(status).toBe(200)
     expect(json.ok).toBe(true)
   })
 
-  it('alert_id가 이 참여자 것이 아니면 실제로 바뀐 행이 없어 404', async () => {
-    const fake = makeFakeSupabase([
-      { data: { id: 'p1' } },
-      { data: null, error: null }, // 조건에 맞는 행 없음 (스테일 alert_id 등)
-    ])
+  it('alert_id가 이 참여자 것이 아니면(스테일 id 등) 404', async () => {
+    const fake = makeFakeSupabase([{ data: { ok: false, error: 'alert_not_found' } }])
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status } = await callPatch({ alert_id: 'stale-id', participant_id: 'p1', session_token: 's1' })
     expect(status).toBe(404)

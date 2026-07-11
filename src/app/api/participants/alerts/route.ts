@@ -40,6 +40,12 @@ export async function GET(req: NextRequest) {
 
 // 참여자가 모달을 확인(닫기) 처리. 행을 삭제하지 않고 acknowledged_at만 채운다 —
 // 운영자 개입 이력은 감사 목적으로 계속 보존된다.
+//
+// "이 세션이 진짜 이 참여자인지" 확인과 실제 업데이트를 서버에서 별도의 두 쿼리로
+// 순차 실행하면 왕복이 두 번 걸려 확인 버튼을 눌렀을 때 체감 지연이 생긴다.
+// operator_alerts에는 session_token이 없어 participants와의 조인 없이는 update() 필터
+// 하나로 합칠 수 없으므로(Supabase JS 클라이언트는 update 필터에서 조인 미지원),
+// 검증+업데이트를 acknowledge_operator_alert RPC로 묶어 왕복을 한 번으로 줄인다.
 export async function PATCH(req: NextRequest) {
   const { alert_id, participant_id, session_token } = await req.json()
 
@@ -49,32 +55,22 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: participant } = await supabase
-    .from('participants')
-    .select('id')
-    .eq('id', participant_id)
-    .eq('session_token', session_token)
-    .maybeSingle()
-
-  if (!participant) {
-    return NextResponse.json({ error: '참여자를 찾을 수 없습니다' }, { status: 404 })
-  }
-
-  const { data: updated, error } = await supabase
-    .from('operator_alerts')
-    .update({ acknowledged_at: new Date().toISOString() })
-    .eq('id', alert_id)
-    .eq('participant_id', participant_id)
-    .select('id')
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('acknowledge_operator_alert', {
+    p_alert_id: alert_id,
+    p_participant_id: participant_id,
+    p_session_token: session_token,
+  })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  // alert_id가 이 참여자 것이 아니면(스테일 id 등) 실제로 바뀐 행이 없다 — 조용히
-  // 성공 처리하면 클라이언트는 확인됐다고 믿지만 서버는 여전히 미확인 상태로 남는다.
-  if (!updated) {
-    return NextResponse.json({ error: '메시지를 찾을 수 없습니다' }, { status: 404 })
+
+  if (!data?.ok) {
+    // participant_not_found(세션 불일치)와 alert_not_found(스테일 id 등) 모두 참여자
+    // 입장에서는 "메시지를 찾을 수 없다"는 동일한 404로 보여도 무방하다 — 조용히 성공
+    // 처리하면 클라이언트는 확인됐다고 믿지만 서버는 여전히 미확인 상태로 남는다.
+    const message = data?.error === 'participant_not_found' ? '참여자를 찾을 수 없습니다' : '메시지를 찾을 수 없습니다'
+    return NextResponse.json({ error: message }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true })
