@@ -135,6 +135,51 @@ export interface Message {
   created_at: string
 }
 
+// get_operator_dashboard() RPC 응답 (Operator Analytics 도메인, BUSINESS_RULES.md §2.10
+// "Phase 5"). hot_density는 방 화면의 실시간 HOT %와 다른, 지난 영업일 비교 전용 파생값
+// (그 영업일의 HOT 탭 수 / 손님 수)이다.
+export interface DashboardDailySession {
+  room_id: string
+  name: string
+  date: string
+  duration_seconds: number | null
+  guest_count: number
+  avg_star: number
+  hot_taps: number
+  hot_density: number
+  heart_count: number
+  alert_count: number
+}
+
+export interface DashboardBestDay {
+  room_id: string
+  name: string
+  date: string
+  hot_density?: number
+  avg_star?: number
+  guest_count?: number
+}
+
+export interface DashboardWeekdayPattern {
+  weekday: number // 0=일 ... 6=토 (Postgres extract(dow))
+  avg_guests: number
+}
+
+export interface OperatorDashboard {
+  total_sessions: number
+  total_guest_visits: number
+  unique_guests: number
+  returning_guest_count: number
+  avg_guests_per_session: number | null
+  avg_star: number | null
+  avg_hot_density: number | null
+  daily: DashboardDailySession[]
+  best_by_hot_density: DashboardBestDay[]
+  best_by_star: DashboardBestDay[]
+  best_by_guests: DashboardBestDay[]
+  weekday_pattern: DashboardWeekdayPattern[]
+}
+
 // get_live_hot_venues() RPC 응답 1건. 의도적으로 room_id/code를 포함하지 않는다 —
 // Discovery 화면은 방 코드/QR을 절대 노출하지 않는다 (BUSINESS_RULES.md §2.6).
 export interface DiscoverVenue {

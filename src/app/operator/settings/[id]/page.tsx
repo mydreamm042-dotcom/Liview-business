@@ -314,12 +314,22 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      {/* 좌석 배치 + 손님 케어 (Seating/Guest Care 도메인) */}
+      {/* 좌석 배치 (Seating 도메인) — 손님 케어(경고 메시지/좌석 이동)는 방 화면으로 이동함 */}
       <button className="card" onClick={() => router.push(`/operator/settings/${id}/seats`)}
-        style={{ padding: 18, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
         <div>
           <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>좌석 관리</p>
-          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>좌석 구성, 실시간 자리배치도, 손님 케어</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>드래그로 매장 구조에 맞게 좌석 배치</p>
+        </div>
+        <span style={{ color: 'var(--muted2)' }}>→</span>
+      </button>
+
+      {/* 운영자 대시보드 (Operator Analytics 도메인, §2.10 "Phase 5") */}
+      <button className="card" onClick={() => router.push(`/operator/settings/${id}/dashboard`)}
+        style={{ padding: 18, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>📊 운영 리포트</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>지난 영업일 추이, 베스트 데이, 재방문 손님</p>
         </div>
         <span style={{ color: 'var(--muted2)' }}>→</span>
       </button>

@@ -44,7 +44,7 @@
 | **3** | Liview 홈 — 지도 진입점 + 실시간 탐색 (Discovery + Public Transparency MVP) | ✅ 완료 (배포 확인됨) |
 | **4** | 좌석 배치 & 좌석 선택 + 운영자 좌석 이동 + 손님 케어(경고 메시지) MVP | ✅ 완료 (쿠폰 지급은 별도 Phase로 연기) |
 | **4.5 (신규 삽입)** | **운영자 정식 회원가입/로그인** — `operator_owner_token` 임시 인증을 Supabase Auth + `operators`/`venues.owner_id`로 전환 | 진행 중 |
-| 5 | 운영자 대시보드 | 진행 중 |
+| 5 | 운영자 대시보드 | ✅ 완료 |
 | 6 (Staff 추가안 통합) | 이벤트 타임라인 + 직원 교대/친절도 평가 | 대기 |
 | 7 (Review 추가안 통합) | 리뷰 유도 + 검증 리뷰(venue_reviews) | 대기 |
 | 8 | Polish & Integration | 대기 |
