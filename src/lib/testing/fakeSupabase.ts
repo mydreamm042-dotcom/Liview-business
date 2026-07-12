@@ -31,6 +31,7 @@ export function makeFakeSupabase(
     limit: chain,
     insert: chain,
     update: chain,
+    upsert: chain,
     delete: chain,
     single: () => Promise.resolve(next()),
     maybeSingle: () => Promise.resolve(next()),

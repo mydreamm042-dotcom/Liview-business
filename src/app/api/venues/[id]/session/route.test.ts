@@ -111,10 +111,12 @@ describe('POST /api/venues/[id]/session — 영업 시작', () => {
   })
 
   it('영업 중이 아니면 새 BUSINESS 방을 생성한다', async () => {
+    const hours = Array.from({ length: 7 }, (_, weekday) => ({ weekday, is_closed: false }))
     const fake = makeFakeSupabase(
       [
         { data: { id: 'v1', name: '별빛포차', owner_id: 'u1' } },
         { data: null }, // 기존 active 세션 없음
+        { data: hours }, // 요일별 영업시간 7일 전부 설정됨, 오늘도 정기휴무 아님
         { data: null }, // 방 코드 중복 확인 (없음)
         { data: { id: 'room-2', name: '별빛포차 세션', status: 'active' } }, // insert 결과
       ],
@@ -125,6 +127,39 @@ describe('POST /api/venues/[id]/session — 영업 시작', () => {
     expect(status).toBe(200)
     expect(json.alreadyOpen).toBe(false)
     expect(json.session.status).toBe('active')
+  })
+
+  // Phase 5.5 — 자동 마감(§2.1)의 유일한 판단 근거가 영업시간이라, 미설정이면 시작 자체를 막는다
+  it('영업시간이 설정 안 됐으면 400', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', name: '별빛포차', owner_id: 'u1' } },
+        { data: null },
+        { data: [] }, // venue_business_hours 없음 (7일 미만)
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status, json } = await callStart('v1')
+    expect(status).toBe(400)
+    expect(json.error).toContain('영업시간')
+  })
+
+  it('오늘이 정기휴무로 설정돼 있으면 400', async () => {
+    const todayWeekday = new Date().getDay()
+    const hours = Array.from({ length: 7 }, (_, weekday) => ({ weekday, is_closed: weekday === todayWeekday }))
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', name: '별빛포차', owner_id: 'u1' } },
+        { data: null },
+        { data: hours },
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status, json } = await callStart('v1')
+    expect(status).toBe(400)
+    expect(json.error).toContain('휴무')
   })
 })
 

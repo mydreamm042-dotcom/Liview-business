@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
-// Vercel Cron이 주기적으로 호출한다 (vercel.json 참고).
-// 종료된 지 24시간 지난 방 + 종료 안 된 채로 2일 지난 방을 정리한다.
+// Vercel Cron이 매일 새벽 5시에 호출한다 (vercel.json 참고). Vercel 무료 플랜은 크론이
+// 하루 1회만 가능해서, 두 정리 작업을 이 배치 하나에 묶어둔다 — 유료 플랜으로 올리면
+// 이 라우트는 그대로 두고 vercel.json의 주기만 매시간으로 좁히면 된다.
+// 1. 종료된 지 24시간 지난 PERSONAL 방 + 종료 안 된 채로 2일 지난 PERSONAL 방 정리
+// 2. 마감시간(+1시간)이 지났는데 운영자가 "영업 종료"를 안 누른 BUSINESS 방 자동 마감
+//    (Phase 5.5, BUSINESS_RULES.md §2.1 "마감 시간 기반 자동 마감")
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -10,11 +14,17 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createServerSupabaseClient()
-  const { error } = await supabase.rpc('delete_old_rooms')
 
-  if (error) {
-    console.error('[cleanup-rooms] rpc error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const { error: deleteError } = await supabase.rpc('delete_old_rooms')
+  if (deleteError) {
+    console.error('[cleanup-rooms] delete_old_rooms error:', deleteError)
+    return NextResponse.json({ error: deleteError.message }, { status: 500 })
+  }
+
+  const { error: closeError } = await supabase.rpc('close_scheduled_business_sessions')
+  if (closeError) {
+    console.error('[cleanup-rooms] close_scheduled_business_sessions error:', closeError)
+    return NextResponse.json({ error: closeError.message }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

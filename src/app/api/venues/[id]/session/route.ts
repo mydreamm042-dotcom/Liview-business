@@ -68,6 +68,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ session: existingSession, alreadyOpen: true })
   }
 
+  // 영업시간 미설정 매장은 영업 시작 자체를 막는다 — 요일별 마감시간이 §2.1 "마감 시간
+  // 기반 자동 마감"의 유일한 판단 근거라서, 설정이 없으면 그 안전장치 자체가 작동하지
+  // 않게 되기 때문이다(Phase 5.5).
+  const { data: hoursRows } = await supabase
+    .from('venue_business_hours')
+    .select('weekday, is_closed')
+    .eq('venue_id', id)
+
+  if (!hoursRows || hoursRows.length < 7) {
+    return NextResponse.json({ error: '영업시간을 먼저 설정해주세요' }, { status: 400 })
+  }
+
+  const todayWeekday = new Date().getDay()
+  const todayHours = hoursRows.find(h => h.weekday === todayWeekday)
+  if (todayHours?.is_closed) {
+    return NextResponse.json({ error: '오늘은 정기 휴무일이에요' }, { status: 400 })
+  }
+
   // rooms.code는 여전히 내부 URL 슬러그로 쓰이므로 계속 생성한다 (BUSINESS_RULES.md §2.2 —
   // 참여자에게 노출/요구하지 않을 뿐, 컬럼 자체를 없애는 건 아니다).
   let code = ''

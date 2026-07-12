@@ -84,6 +84,17 @@ export interface Participant {
   seat_assigned_at?: string | null
 }
 
+// 요일별 영업시간 (Venue 도메인 확장, BUSINESS_RULES.md §2.2 "요일별 영업시간", Phase 5.5).
+// weekday: 0=일요일 ... 6=토요일 (Postgres extract(dow)와 동일). 매장당 정확히 7행.
+export interface VenueBusinessHours {
+  weekday: number
+  is_closed: boolean
+  is_24h: boolean
+  open_time: string  // 'HH:MM' 또는 'HH:MM:SS'
+  close_time: string
+  last_order_time: string | null
+}
+
 // 매장 좌석 마스터 (Seating 도메인). 세션(오늘 영업)이 바뀌어도 유지되는 Venue 소유 데이터.
 // position_x/position_y: 자리배치도 캔버스 대비 0~100 퍼센트 좌표 (§2.8 "좌석 배치 자유 구성").
 export interface VenueSeat {

@@ -58,6 +58,9 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [passwordEnabled, setPasswordEnabled] = useState(false)
   const [password, setPassword] = useState('')
 
+  // 요일별 영업시간 설정 여부 (Phase 5.5) — 7일 전부 설정돼야 "영업 시작"이 가능하다.
+  const [hoursConfigured, setHoursConfigured] = useState<boolean | null>(null)
+
   useEffect(() => {
     fetch(`/api/venues/${id}`)
       .then(res => res.json())
@@ -86,6 +89,11 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       .then(data => setSession(data.session ?? null))
       .catch(() => {})
       .finally(() => setSessionLoaded(true))
+
+    fetch(`/api/venues/${id}/business-hours`)
+      .then(res => res.json())
+      .then(data => setHoursConfigured((data.hours ?? []).length === 7))
+      .catch(() => setHoursConfigured(false))
   }, [id])
 
   const handleStartSession = async () => {
@@ -261,6 +269,20 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
+      {/* 영업시간 미설정 안내 — Phase 5.5: 자동 마감의 유일한 판단 근거라 설정 전엔
+          영업 시작 자체가 API에서도 막힌다. 여기서 미리 안내하고 바로 이동시킨다. */}
+      {hoursConfigured === false && (
+        <button className="card" onClick={() => router.push(`/operator/settings/${id}/hours`)}
+          style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', textAlign: 'left', width: '100%', border: '1.5px solid rgba(245,158,11,0.4)' }}>
+          <span style={{ fontSize: 20 }}>⏰</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>영업시간을 먼저 설정해주세요</p>
+            <p style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>영업 시작을 하려면 요일별 영업시간이 필요해요</p>
+          </div>
+          <span style={{ color: '#f59e0b' }}>→</span>
+        </button>
+      )}
+
       {/* 영업 시작/종료 — 방을 매번 새로 만들지 않고, 등록된 매장에서 오늘 세션만 여닫는다 */}
       <div className="card" style={{ padding: 18, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -298,8 +320,8 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           <button
             className={isOpen ? 'btn btn-secondary' : 'btn btn-primary'}
             onClick={isOpen ? handleEndSession : handleStartSession}
-            disabled={!sessionLoaded || sessionBusy}
-            style={{ flex: 1, opacity: !sessionLoaded || sessionBusy ? 0.5 : 1, fontSize: 15 }}>
+            disabled={!sessionLoaded || sessionBusy || (!isOpen && hoursConfigured === false)}
+            style={{ flex: 1, opacity: !sessionLoaded || sessionBusy || (!isOpen && hoursConfigured === false) ? 0.5 : 1, fontSize: 15 }}>
             {sessionBusy ? '처리 중...' : isOpen ? '오늘 영업 종료' : '오늘 영업 시작'}
           </button>
           {isOpen && (
@@ -313,6 +335,16 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </div>
+
+      {/* 요일별 영업시간 (Phase 5.5) */}
+      <button className="card" onClick={() => router.push(`/operator/settings/${id}/hours`)}
+        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>⏰ 영업시간 설정</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>요일별 영업시간, 24시간/정기휴무, 라스트오더</p>
+        </div>
+        <span style={{ color: 'var(--muted2)' }}>→</span>
+      </button>
 
       {/* 좌석 배치 (Seating 도메인) — 손님 케어(경고 메시지/좌석 이동)는 방 화면으로 이동함 */}
       <button className="card" onClick={() => router.push(`/operator/settings/${id}/seats`)}
