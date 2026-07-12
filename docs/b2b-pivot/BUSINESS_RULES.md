@@ -20,45 +20,47 @@
 | **Mutual Match** (쌍방 매칭) | Reaction 중 `heart` 타입 데이터로부터 "서로 호감이 오갔는가"를 판정하는 파생 도메인 | (reactions 기반 계산, 별도 테이블 없음) | Reaction |
 | **Chat** (채팅) | 방 내부의 공용 메시지 기록을 책임지는 도메인 | `messages` | Room, Participant |
 | **End Vote** (종료 투표) | 참여자들이 방 종료를 합의하는 투표를 책임지는 도메인 | `end_votes` | Room, Participant |
-| **Venue** (매장) 🆕 | 하나의 물리적 매장이 시간에 걸쳐 여러 방(세션)을 만들어도 유지되는 브랜딩·위치·설정을 책임지는 도메인 | `venues` | (최상위, 다른 도메인이 참조) |
+| **Venue** (매장) 🆕 | 하나의 물리적 매장이 시간에 걸쳐 여러 방(세션)을 만들어도 유지되는 브랜딩·위치·설정을 책임지는 도메인 | `venues`, `venue_business_hours`(요일별 영업시간, Phase 5.5) | Operator(소유자), (최상위, 다른 도메인이 참조) |
 | **Staff** (직원) 🆕 | 매장 소속 직원의 목록, 교대 근무, 참여자로부터 받는 친절도 평가를 책임지는 도메인 | `staff_members`, `staff_shifts`, `staff_evaluations` | Venue, Room, Participant |
 | **Review** (검증 리뷰) 🆕 | 참여자의 실제 세션 데이터를 근거로 한 "조작 불가능한 방문 인증 리뷰"의 생성·공개여부를 책임지는 도메인 | `venue_reviews` | Venue, Room, Participant, Reaction |
 | **Public Transparency** (공개 채팅) 🆕 | 매장이 opt-in한 경우에 한해, 방 채팅을 비참여자에게도 노출하는 규칙을 책임지는 도메인 | (Chat 도메인 데이터를 조건부로 재노출, 별도 테이블 없음) | Chat, Venue |
 | **Discovery** (탐색/주변추천) 🆕 | 참여자의 현재 위치를 기준으로, 실시간으로 분위기가 좋은 주변 매장을 찾아주는 도메인 | (Venue + Room + Reaction 기반 계산, 별도 테이블 없음) | Venue, Room, Reaction |
-| **Seating** (좌석/자리배치) 🆕 | 매장 내부의 물리적 좌석 배치를 운영자가 구성하고, 참여자가 입장 시 좌석을 선택하며, 운영자가 참여자의 좌석을 직접 옮길 수 있고(드래그/모바일 롱프레스), 좌석 단위로 실시간 HOT 활동과 착석 경과시간을 보여주는 도메인 | `venue_seats`(구현 완료), `participants.seat_id`+`seat_assigned_at`(구현 완료) | Venue, Room, Participant, Reaction |
+| **Seating** (좌석/자리배치) 🆕 | 매장 내부의 물리적 좌석 배치를 운영자가 구성하고, 참여자가 입장 시 좌석을 선택하며, 운영자가 참여자의 좌석을 직접 옮길 수 있고(드래그/모바일 롱프레스), 좌석 단위로 실시간 HOT 활동과 착석 경과시간을 보여주는 도메인 | `venue_seats`(`position_x`/`position_y` 자유 배치 좌표 포함, 구현 완료), `participants.seat_id`+`seat_assigned_at`(구현 완료) | Venue, Room, Participant, Reaction |
 | **Guest Care** (손님 케어) 🆕 | 운영자가 자리배치도에서 특정 손님을 지목(우클릭/터치)해 개입하는 행위를 책임지는 확장형 도메인. Reaction 도메인의 `warning`(참여자 간 익명 자제 시그널)과는 별개 개념 — 혼동 방지를 위해 "운영자 경고 메시지(Operator Alert)"로 구분 명명. 쿠폰 지급은 사양 미확정으로 Phase 4 범위 밖(별도 Phase로 연기) | `operator_alerts`(구현 완료), `venue_coupons`+`coupon_grants`(추후 별도 Phase에서 신설 예정) | Venue, Room, Participant, Seating |
-| **Operator Analytics** (운영 분석) 🆕 | 위 모든 도메인의 데이터를 읽기 전용으로 재가공해 대시보드/퍼널/리포트/이벤트 타임라인을 제공하는 도메인 (자체 상태를 쓰지 않음) | `operation_events` (기록용) + 그 외는 조회 함수 | 전 도메인 |
+| **Operator Analytics** (운영 분석) 🆕 | 위 모든 도메인의 데이터를 읽기 전용으로 재가공해 대시보드/퍼널/리포트/이벤트 타임라인을 제공하는 도메인 (자체 상태를 쓰지 않음) | `get_operator_dashboard()`(구현 완료, Phase 5) + `operation_events`(기록용, Phase 6 예정) | 전 도메인 |
 | **Operator** (운영자 계정) 🆕 | 매장 운영자(사람)의 회원가입/로그인/신원을 책임지는 도메인. Venue 도메인은 "매장"을, Operator 도메인은 "그 매장을 가진 사람"을 책임진다 — 종전엔 이 둘이 `operator_owner_token`(브라우저별 임의 토큰)이라는 하나의 값으로 뭉뚱그려져 있었으나, 정식 회원 개념 도입으로 분리한다 | `operators` (Supabase Auth `auth.users`와 1:1), `venues.owner_id` | Venue |
 
 ### 0.2 도메인 관계도
 
 ```
-Venue (매장) ──1:N── Room (방) ──1:N── Participant (참여자)
-   │                    │                    │
-   │                    │                    ├──1:N── Reaction (하트/경고/별점/HOT)
-   │                    │                    │            │
-   │                    │                    │            ├─ 파생 ─> Atmosphere Index (HOT 지수)
-   │                    │                    │            └─ 파생 ─> Mutual Match (쌍방 매칭)
-   │                    │                    │
-   │                    │                    ├──1:N── Chat (메시지)
-   │                    │                    │            └─ 조건부 재노출 ─> Public Transparency
-   │                    │                    │
-   │                    │                    ├──1:N── End Vote (종료 투표)
-   │                    │                    │
-   │                    │                    └──1:1(선택)── seat_id ──ref──> Venue Seat Layout (좌석)
-   │                    │                                                        ├─ 파생 ─> 좌석별 HOT 표시 (Reaction 조인)
-   │                    │                                                        ├─ 파생 ─> 착석 경과시간 (seat_assigned_at 기준)
-   │                    │                                                        └─ 운영자 조작 ─> 좌석 이동(드래그/롱프레스, 참여자 화면에도 반영)
-   │                    │
-   │                    ├──1:N── Venue Review (Room+Participant 스냅샷 기반)
-   │                    ├──ref── Staff Shift (해당 시각 근무자)
-   │                    └──ref(seat_id 경유)── Guest Care (Operator Alert / Coupon Grant)
-   │
-   ├──1:N── Staff Member ──1:N── Staff Evaluation (Participant 투표, Room에 귀속)
-   ├──1:N── Venue Seat Layout (매장이 소유하는 좌석 배치도)
-   ├──1:N── Venue Coupon (매장이 앱에 등록한 쿠폰 카탈로그) ──1:N── Coupon Grant (특정 참여자에게 지급)
-   │
-   └──조회 대상──> Discovery (위치 기반 실시간 랭킹)
+Operator (운영자 계정) ──1:N(소유)── Venue (매장) ──1:N── Room (방) ──1:N── Participant (참여자)
+                                        │                    │                    │
+                                        │                    │                    ├──1:N── Reaction (하트/경고/별점/HOT)
+                                        │                    │                    │            │
+                                        │                    │                    │            ├─ 파생 ─> Atmosphere Index (HOT 지수)
+                                        │                    │                    │            └─ 파생 ─> Mutual Match (쌍방 매칭)
+                                        │                    │                    │
+                                        │                    │                    ├──1:N── Chat (메시지)
+                                        │                    │                    │            └─ 조건부 재노출 ─> Public Transparency
+                                        │                    │                    │
+                                        │                    │                    ├──1:N── End Vote (종료 투표)
+                                        │                    │                    │
+                                        │                    │                    └──1:1(선택)── seat_id ──ref──> Venue Seat Layout (좌석)
+                                        │                    │                                                        ├─ 파생 ─> 좌석별 HOT 표시 (Reaction 조인)
+                                        │                    │                                                        ├─ 파생 ─> 착석 경과시간 (seat_assigned_at 기준)
+                                        │                    │                                                        └─ 운영자 조작 ─> 좌석 이동(드래그/롱프레스, 참여자 화면에도 반영)
+                                        │                    │
+                                        │                    ├──1:N── Venue Review (Room+Participant 스냅샷 기반)
+                                        │                    ├──ref── Staff Shift (해당 시각 근무자)
+                                        │                    └──ref(seat_id 경유)── Guest Care (Operator Alert / Coupon Grant)
+                                        │
+                                        ├──1:N── Venue Business Hours (요일별 영업시간)
+                                        │            └─ 근거 ─> Room의 마감시간 기반 자동 마감 (closed_reason='auto_schedule')
+                                        ├──1:N── Staff Member ──1:N── Staff Evaluation (Participant 투표, Room에 귀속)
+                                        ├──1:N── Venue Seat Layout (매장이 소유하는 좌석 배치도)
+                                        ├──1:N── Venue Coupon (매장이 앱에 등록한 쿠폰 카탈로그) ──1:N── Coupon Grant (특정 참여자에게 지급)
+                                        │
+                                        └──조회 대상──> Discovery (위치 기반 실시간 랭킹)
 
 Operator Analytics: 위 전체 도메인을 읽기 전용으로 가로질러 재가공 (자체 쓰기 없음, operation_events 제외)
 ```
@@ -74,6 +76,7 @@ Operator Analytics: 위 전체 도메인을 읽기 전용으로 가로질러 재
 - **Seating ≠ Guest Care**: Seating은 "누가 어디 앉아 있는가"(위치)를 책임지고, Guest Care는 "그 손님에게 운영자가 무엇을 하는가"(개입)를 책임진다. 둘 다 같은 화면(자리배치도)에서 트리거되지만 서로 다른 도메인이다 — Guest Care는 앞으로 계속 액션 종류가 늘어날 확장형 도메인이라 Seating과 분리해뒀다.
 - **"경고" 용어 충돌 주의**: Reaction 도메인의 `warning`(자제 시그널, 참여자↔참여자 익명 신호)과 Guest Care의 "운영자 경고 메시지"(운영자→특정 참여자, 자유 텍스트, 발신자 실명)는 완전히 다른 개념이다. 구현 시 반드시 별개 이름(`operator_alerts` 등)을 쓰고 `reactions.type='warning'`과 절대 혼용하지 않는다.
 - **Guest Care는 아직 일부만 확정됐다**: 경고 메시지(자유 텍스트)와 쿠폰 지급(매장 등록 카탈로그 중 선택)까지는 확정됐지만, 그 외 세부사항(메시지 전달 방식, 쿠폰 등록 플로우, 손님의 쿠폰 수령 확인 방법)은 아직 설명이 없어 규칙을 추측해서 만들지 않는다. 사용자가 "앞으로 기능이 더 늘어날 가능성이 높다"고 명시했으므로, 액션 종류를 쉽게 추가할 수 있는 구조로 설계한다.
+- **Operator ≠ Venue**: Operator는 "그 매장을 가진 사람(로그인 계정)"을 책임지고, Venue는 "매장 자체(브랜딩·설정·영업시간)"를 책임진다. 소유 관계는 `venues.owner_id` 외래키 하나로 표현되며(1 운영자 : N 매장), 매장의 자동 마감·대시보드 조회 권한 등은 전부 이 소유 관계를 근거로 판정한다.
 
 ---
 
