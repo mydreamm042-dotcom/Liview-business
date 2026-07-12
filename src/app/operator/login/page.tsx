@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ensureOperatorProfile } from '@/lib/operatorProfile'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 // 운영자 로그인 (Operator 도메인, BUSINESS_RULES.md §2.11).
 export default function OperatorLoginPage() {
@@ -37,10 +38,7 @@ export default function OperatorLoginPage() {
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 26, fontWeight: 800 }}>사장님 로그인</h1>
-      </div>
+      <PageEyebrowHeader eyebrow="OPERATOR" title="사장님 로그인" />
 
       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>이메일</label>
       <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" style={{ marginBottom: 20 }} />

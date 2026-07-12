@@ -3,6 +3,12 @@
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { BusinessHoursDay, normalizeDay, validateDay, WEEKDAY_LABELS } from '@/lib/businessHours'
+import BackButton from '@/components/BackButton'
+import LoadingScreen from '@/components/LoadingScreen'
+import ErrorScreen from '@/components/ErrorScreen'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import Toggle from '@/components/Toggle'
+import InlineMessage from '@/components/InlineMessage'
 
 // 월~일 순서로 보여주되(사용자 표시 관례), 내부 weekday 값은 DB/대시보드와 동일하게
 // 0=일요일 ... 6=토요일을 그대로 쓴다 (Postgres extract(dow)와 맞춤).
@@ -102,48 +108,29 @@ export default function BusinessHoursPage({ params }: { params: Promise<{ id: st
   }
 
   if (loadError) {
-    return (
-      <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
-        <p style={{ color: '#ff6b6b', fontSize: 14 }}>{loadError}</p>
-        <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
-        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
-      </main>
-    )
+    return <ErrorScreen message={loadError} />
   }
 
   if (!days) {
-    return <main className="flex min-h-dvh items-center justify-center"><p style={{ color: 'var(--muted2)' }}>불러오는 중...</p></main>
+    return <LoadingScreen />
   }
 
   const rowsToShow = applyToAll ? [days.find(d => d.weekday === 1) ?? days[0]] : DISPLAY_ORDER.map(w => days.find(d => d.weekday === w)!)
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 120 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 24 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} />
 
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>{venueName} 영업시간</h1>
-        <p style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 6 }}>
-          영업 시작에 꼭 필요해요 — 여기 설정한 종료 시간+1시간이 지나면, 종료 버튼을 못 눌러도 시스템이 자동으로 마감해줘요
-        </p>
-      </div>
+      <PageEyebrowHeader
+        eyebrow="OPERATOR"
+        title={`${venueName} 영업시간`}
+        subtitle="영업 시작에 꼭 필요해요 — 여기 설정한 종료 시간+1시간이 지나면, 종료 버튼을 못 눌러도 시스템이 자동으로 마감해줘요"
+        marginBottom={24} titleSize={24} subtitleSize={12}
+      />
 
       <div className="card-sm" style={{ padding: '14px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>모든 요일 동일하게 적용</span>
-        <button onClick={() => handleToggleApplyAll(!applyToAll)}
-          style={{
-            width: 44, height: 26, borderRadius: 999, cursor: 'pointer', position: 'relative', flexShrink: 0,
-            background: applyToAll ? 'var(--accent)' : 'var(--card2)', border: '1px solid var(--border)',
-          }}>
-          <span style={{
-            position: 'absolute', top: 2, left: applyToAll ? 20 : 2, width: 20, height: 20, borderRadius: '50%',
-            background: '#fff', transition: 'left 0.15s',
-          }} />
-        </button>
+        <Toggle checked={applyToAll} onChange={handleToggleApplyAll} ariaLabel="모든 요일 동일하게 적용" />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
@@ -196,8 +183,8 @@ export default function BusinessHoursPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
-        {saveError && <p style={{ fontSize: 12, color: '#ff6b6b', textAlign: 'center', marginBottom: 8 }}>{saveError}</p>}
-        {savedAt && <p style={{ fontSize: 12, color: '#10b981', textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</p>}
+        {saveError && <InlineMessage type="error" style={{ textAlign: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
+        {savedAt && <InlineMessage type="success" style={{ textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</InlineMessage>}
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}
           style={{ fontSize: 16, opacity: saving ? 0.5 : 1 }}>
           {saving ? '저장 중...' : '영업시간 저장'}

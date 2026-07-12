@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { getSessionToken, storeRoomData } from '@/lib/session'
 import { createClient } from '@/lib/supabase/client'
 import { RoomType, VenueCategory } from '@/lib/supabase/types'
+import BackButton from '@/components/BackButton'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 const CATEGORIES: { value: VenueCategory; label: string }[] = [
   { value: 'pocha', label: '포차' },
@@ -108,18 +110,15 @@ export default function CreatePage() {
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 32 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} marginBottom={32} />
 
-      <div className="animate-fade-in" style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{isBusiness ? 'MY VENUE' : 'NEW ROOM'}</p>
-        <h1 style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>{isBusiness ? '매장 관리' : '방 만들기'}</h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 14 }}>
-          {isBusiness ? '매장은 한 번만 등록하면 고정 QR이 계속 유지돼요' : '오늘 모임의 이름을 정해주세요'}
-        </p>
-      </div>
+      <PageEyebrowHeader
+        className="animate-fade-in"
+        eyebrow={isBusiness ? 'MY VENUE' : 'NEW ROOM'}
+        title={isBusiness ? '매장 관리' : '방 만들기'}
+        subtitle={isBusiness ? '매장은 한 번만 등록하면 고정 QR이 계속 유지돼요' : '오늘 모임의 이름을 정해주세요'}
+        marginBottom={28} titleSize={30} titleLineHeight={1.2} titleMarginBottom={8} subtitleSize={14} subtitleMarginTop={0}
+      />
 
       {/* 방 타입 선택: PERSONAL(기존 B2C) / BUSINESS(매장 운영) */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>

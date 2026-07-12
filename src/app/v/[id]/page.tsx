@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSessionToken, storeRoomData } from '@/lib/session'
 import { VenueCategory } from '@/lib/supabase/types'
+import LoadingScreen from '@/components/LoadingScreen'
 
 const RANDOM_NICKNAMES = [
   '소주1번', '안취했어', '오늘만산다', '고삐풀림', '날못막아',
@@ -116,7 +117,7 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
   }
 
   if (!venue) {
-    return <main className="flex min-h-dvh items-center justify-center"><p style={{ color: 'var(--muted2)' }}>불러오는 중...</p></main>
+    return <LoadingScreen />
   }
 
   const accent = venue.primary_color ?? '#667eea'

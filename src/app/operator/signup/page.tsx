@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ensureOperatorProfile } from '@/lib/operatorProfile'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 // 운영자 회원가입 (Operator 도메인, BUSINESS_RULES.md §2.11). 비밀번호 해시/이메일 인증은
 // Supabase Auth가 전담하고, 이 화면은 auth.signUp 호출 + operators 프로필 생성만 담당한다.
@@ -58,11 +59,7 @@ export default function OperatorSignupPage() {
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 26, fontWeight: 800 }}>사장님 회원가입</h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 14, marginTop: 6 }}>매장을 관리하려면 계정이 필요해요</p>
-      </div>
+      <PageEyebrowHeader eyebrow="OPERATOR" title="사장님 회원가입" subtitle="매장을 관리하려면 계정이 필요해요" />
 
       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>이름 (선택)</label>
       <input className="input" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="홍길동" style={{ marginBottom: 20 }} />

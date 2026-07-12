@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation'
 import { OperatorDashboard, DashboardBestDay } from '@/lib/supabase/types'
 import TrendLine from '@/components/TrendLine'
 import WeekdayBars from '@/components/WeekdayBars'
+import BackButton from '@/components/BackButton'
+import LoadingScreen from '@/components/LoadingScreen'
+import ErrorScreen from '@/components/ErrorScreen'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 function fmtShortDate(iso: string) {
   const [, m, d] = iso.split('-')
@@ -47,17 +51,11 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
   }, [id])
 
   if (loadError) {
-    return (
-      <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
-        <p style={{ color: '#ff6b6b', fontSize: 14 }}>{loadError}</p>
-        <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
-        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
-      </main>
-    )
+    return <ErrorScreen message={loadError} />
   }
 
   if (!dashboard) {
-    return <main className="flex min-h-dvh items-center justify-center"><p style={{ color: 'var(--muted2)' }}>불러오는 중...</p></main>
+    return <LoadingScreen />
   }
 
   const guestSeries = dashboard.daily.map(d => ({ date: d.date, value: d.guest_count }))
@@ -72,16 +70,14 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 60 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 24 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} />
 
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>{venueName} 운영 리포트</h1>
-        <p style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 6 }}>지난 영업일들의 데이터를 모아봤어요</p>
-      </div>
+      <PageEyebrowHeader
+        eyebrow="OPERATOR"
+        title={`${venueName} 운영 리포트`}
+        subtitle="지난 영업일들의 데이터를 모아봤어요"
+        marginBottom={24} titleSize={24} subtitleSize={12}
+      />
 
       {dashboard.total_sessions === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center' }}>

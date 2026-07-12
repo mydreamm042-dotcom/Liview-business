@@ -7,6 +7,8 @@ import { Participant, VenueSeat, Reaction, VenueBranding } from '@/lib/supabase/
 import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
 import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 import SeatMap from '@/components/SeatMap'
+import LoadingScreen from '@/components/LoadingScreen'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 // 참여자용 자리배치도 — BUSINESS 방은 좌석 선택이 필수다 (BUSINESS_RULES.md §2.8).
 // 매장에 등록된 좌석이 하나도 없으면(운영자 미설정) 게이트를 걸지 않고 방으로 바로 보낸다.
@@ -130,16 +132,17 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
   }
 
   if (!loaded) {
-    return <main className="flex min-h-dvh items-center justify-center"><p style={{ color: 'var(--muted2)' }}>불러오는 중...</p></main>
+    return <LoadingScreen />
   }
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 40 }}>
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>SEAT</p>
-        <h1 style={{ fontSize: 26, fontWeight: 800 }}>{venue?.name ? `${venue.name} 좌석을 선택해주세요` : '좌석을 선택해주세요'}</h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 13, marginTop: 6 }}>비어있는 좌석을 눌러 앉아주세요</p>
-      </div>
+      <PageEyebrowHeader
+        eyebrow="SEAT"
+        title={venue?.name ? `${venue.name} 좌석을 선택해주세요` : '좌석을 선택해주세요'}
+        subtitle="비어있는 좌석을 눌러 앉아주세요"
+        marginBottom={24} titleSize={26} subtitleSize={13}
+      />
 
       {error && <p style={{ fontSize: 13, color: '#ff6b6b', marginBottom: 16 }}>{error}</p>}
 

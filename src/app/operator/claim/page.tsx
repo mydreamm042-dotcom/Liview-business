@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getSessionToken } from '@/lib/session'
+import LoadingScreen from '@/components/LoadingScreen'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 
 interface ClaimedVenue { id: string; name: string }
 
@@ -42,18 +44,17 @@ export default function ClaimVenuePage() {
   }
 
   if (checkingAuth) {
-    return <main className="flex min-h-dvh items-center justify-center"><p style={{ color: 'var(--muted2)' }}>확인 중...</p></main>
+    return <LoadingScreen label="확인 중..." />
   }
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>기존 매장 가져오기</h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 14, marginTop: 6 }}>
-          로그인 계정 없이 이 브라우저에서 등록했던 매장이 있다면, 지금 로그인한 계정으로 연결할 수 있어요
-        </p>
-      </div>
+      <PageEyebrowHeader
+        eyebrow="OPERATOR"
+        title="기존 매장 가져오기"
+        subtitle="로그인 계정 없이 이 브라우저에서 등록했던 매장이 있다면, 지금 로그인한 계정으로 연결할 수 있어요"
+        titleSize={24}
+      />
 
       {claimed === null ? (
         <>

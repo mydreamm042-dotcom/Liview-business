@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useGeolocation } from '@/hooks/useKakaoMap'
 import { DiscoverVenue, VenueCategory } from '@/lib/supabase/types'
+import BackButton from '@/components/BackButton'
 
 const CATEGORIES: { value: VenueCategory | 'all'; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -78,10 +79,7 @@ function DiscoverContent() {
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 20 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} marginBottom={20} />
 
       <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>🔥 실시간 핫한 가게</h1>
       <p style={{ color: 'var(--muted2)', fontSize: 13, marginBottom: 20 }}>

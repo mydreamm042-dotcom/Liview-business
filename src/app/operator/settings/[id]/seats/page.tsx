@@ -7,6 +7,10 @@ import { Participant, VenueSeat, Reaction } from '@/lib/supabase/types'
 import { isOccupantHot } from '@/lib/seatDisplay'
 import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 import SeatBoxContent from '@/components/SeatBoxContent'
+import BackButton from '@/components/BackButton'
+import ErrorScreen from '@/components/ErrorScreen'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import InlineMessage from '@/components/InlineMessage'
 
 interface SessionInfo { id: string; code?: string; status: string }
 
@@ -161,29 +165,21 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
   }
 
   if (loadError) {
-    return (
-      <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
-        <p style={{ color: '#ff6b6b', fontSize: 14 }}>{loadError}</p>
-        <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
-        <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
-      </main>
-    )
+    return <ErrorScreen message={loadError} />
   }
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 60 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 24 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} />
 
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>OPERATOR</p>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>{venueName} 좌석 배치</h1>
-        <p style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 6 }}>좌석을 드래그해서 실제 매장 구조에 맞게 배치하세요</p>
-      </div>
+      <PageEyebrowHeader
+        eyebrow="OPERATOR"
+        title={`${venueName} 좌석 배치`}
+        subtitle="좌석을 드래그해서 실제 매장 구조에 맞게 배치하세요"
+        marginBottom={24} titleSize={24} subtitleSize={12}
+      />
 
-      {actionError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 16 }}>{actionError}</p>}
+      {actionError && <InlineMessage type="error" style={{ marginBottom: 16 }}>{actionError}</InlineMessage>}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <input className="input" value={newSeatLabel} onChange={e => setNewSeatLabel(e.target.value)}

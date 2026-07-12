@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSessionToken, storeRoomData } from '@/lib/session'
+import BackButton from '@/components/BackButton'
 
 const RANDOM_NICKNAMES = [
   '소주1번', '안취했어', '오늘만산다', '고삐풀림', '날못막아',
@@ -75,10 +76,7 @@ function JoinContent() {
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <button onClick={() => step === 'nickname' && !searchParams.get('code') ? setStep('code') : router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 32 }}>
-        ←
-      </button>
+      <BackButton onClick={() => step === 'nickname' && !searchParams.get('code') ? setStep('code') : router.back()} marginBottom={32} />
 
       {step === 'code' ? (
         <div className="animate-fade-in">
