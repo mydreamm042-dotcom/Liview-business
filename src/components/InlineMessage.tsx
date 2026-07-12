@@ -9,7 +9,7 @@ export default function InlineMessage({
   style?: React.CSSProperties
 }) {
   return (
-    <p style={{ fontSize, color: type === 'error' ? '#ff6b6b' : '#10b981', ...style }}>
+    <p style={{ fontSize, color: type === 'error' ? 'var(--accent)' : '#10b981', ...style }}>
       {children}
     </p>
   )

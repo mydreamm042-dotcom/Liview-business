@@ -8,7 +8,7 @@ export default function ErrorScreen({ message }: { message: string }) {
   const router = useRouter()
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56 }}>
-      <p style={{ color: '#ff6b6b', fontSize: 14 }}>{message}</p>
+      <p style={{ color: 'var(--accent)', fontSize: 14 }}>{message}</p>
       <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ marginTop: 16 }}>로그인하러 가기</button>
       <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 8 }}>홈으로</button>
     </main>
