@@ -25,6 +25,7 @@ export function makeFakeSupabase(
     select: chain,
     eq: chain,
     neq: chain,
+    in: chain,
     is: chain,
     gte: chain,
     order: chain,

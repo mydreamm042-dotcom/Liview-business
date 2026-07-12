@@ -7,6 +7,7 @@ import { useRoom } from '@/hooks/useRoom'
 import { useChat } from '@/hooks/useChat'
 import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
 import InteractionModal from '@/components/InteractionModal'
+import KindnessVoteModal from '@/components/KindnessVoteModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
 import QRCodeDisplay from '@/components/QRCodeDisplay'
 import ChatPanel from '@/components/ChatPanel'
@@ -238,6 +239,48 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
+  // 운영 메모(operation_events) — Operator Analytics 도메인, BUSINESS_RULES.md §2.10
+  // "이벤트 기록 예외". 사전 정의된 타입이 아닌 자유 텍스트 타임스탬프 메모이며, 여기
+  // (방 화면)에 실시간으로 쌓이고 마감 후엔 대시보드 그래프의 마커로도 나타난다.
+  const [eventMemos, setEventMemos] = useState<{ id: string; content: string; created_at: string }[]>([])
+  const [newMemo, setNewMemo] = useState('')
+  const [memoSending, setMemoSending] = useState(false)
+  const [memoError, setMemoError] = useState('')
+
+  useEffect(() => {
+    if (!state.isHost || !state.venue) return
+    const load = () => {
+      fetch(`/api/rooms/${code}/events`)
+        .then(res => res.json())
+        .then(data => setEventMemos(data.events ?? []))
+        .catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, 5_000)
+    return () => clearInterval(interval)
+  }, [state.isHost, state.venue, code])
+
+  const handleAddMemo = async () => {
+    if (!newMemo.trim()) return
+    setMemoSending(true)
+    setMemoError('')
+    try {
+      const res = await fetch(`/api/rooms/${code}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newMemo.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setEventMemos(prev => [...prev, data.event])
+      setNewMemo('')
+    } catch (e) {
+      setMemoError(e instanceof Error ? e.message : '메모 추가에 실패했습니다')
+    } finally {
+      setMemoSending(false)
+    }
+  }
+
   // 채팅창이 닫혀 있어도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
   // (ChatPanel 안에서만 구독하면 창을 닫는 순간 구독이 끊겨 안읽음 배지를 셀 수 없음).
   const { messages: chatMessages, loading: chatLoading, sendMessage } = useChat(roomData?.roomId ?? '')
@@ -339,10 +382,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     router.push(`/room/${code}/result`)
   }
 
-  const handleLeave = async () => {
-    if (!confirm('방을 나갈까요?')) return
-    // 나가기 처리가 서버에서 실패했는데 조용히 화면만 나가버리면, 다른 사람들
-    // 화면에는 계속 남아있는 유령 참여자가 된다. 실패 시 안내하고 방에 머문다.
+  // 나가기 처리가 서버에서 실패했는데 조용히 화면만 나가버리면, 다른 사람들 화면에는
+  // 계속 남아있는 유령 참여자가 된다. 실패 시 안내하고 방에 머문다.
+  const performLeave = async () => {
     if (roomData) {
       try {
         const res = await fetch('/api/participants', {
@@ -361,6 +403,50 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
     clearRoomData()
     router.replace('/')
+  }
+
+  // 직원 친절도 투표 (Staff 도메인, BUSINESS_RULES.md §2.12 "참여자 방 나가기 흐름").
+  // BUSINESS 방이고 그 영업일에 실제로 근무한 직원이 있을 때만 노출한다 — PERSONAL 방과
+  // 직원이 없던 매장은 기존 confirm+즉시 나가기 그대로 유지한다. 모달의 두 버튼(스킵/투표)
+  // 자체가 "나가기 확인"을 겸하므로, 이 경우엔 별도 confirm()을 띄우지 않는다.
+  const [showKindnessVote, setShowKindnessVote] = useState(false)
+  const [kindnessCandidates, setKindnessCandidates] = useState<{ staff_id: string; name: string }[]>([])
+  const [kindnessSubmitting, setKindnessSubmitting] = useState(false)
+
+  const handleLeave = async () => {
+    if (state.venue) {
+      try {
+        const res = await fetch(`/api/rooms/${code}/staff-evaluations`)
+        const data = await res.json()
+        if (res.ok && (data.candidates ?? []).length > 0) {
+          setKindnessCandidates(data.candidates)
+          setShowKindnessVote(true)
+          return
+        }
+      } catch {
+        // 후보 조회 실패는 아래 기존 흐름(confirm 후 즉시 나가기)으로 조용히 폴백한다.
+      }
+    }
+    if (!confirm('방을 나갈까요?')) return
+    await performLeave()
+  }
+
+  const handleKindnessSubmit = async (staffId: string | null) => {
+    setKindnessSubmitting(true)
+    if (staffId) {
+      try {
+        await fetch(`/api/rooms/${code}/staff-evaluations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participant_id: roomData?.participantId, session_token: getSessionToken(), staff_id: staffId }),
+        })
+      } catch {
+        // 투표는 부가 기능이지 나가기의 전제조건이 아니다 — 실패해도 나가기는 계속 진행한다.
+      }
+    }
+    setShowKindnessVote(false)
+    setKindnessSubmitting(false)
+    await performLeave()
   }
 
   // 입장 후 지속 위치 체크로 반경을 벗어났을 때의 자동 나가기 (BUSINESS_RULES.md §2.3).
@@ -667,6 +753,33 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </div>
       )}
 
+      {/* 운영 메모 (Operator Analytics 도메인, §2.10) — 운영자 전용. 자유 텍스트로 지금
+          이 순간을 기록해두면, 마감 후 운영 리포트의 추이 그래프에 그 시각 마커로 남는다. */}
+      {state.isHost && state.venue && (
+        <div style={{ padding: '0 20px', marginBottom: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>운영 메모</p>
+          {memoError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{memoError}</InlineMessage>}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <input className="input" value={newMemo} onChange={e => setNewMemo(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddMemo()} placeholder="예: 단체 손님 케이크 서비스" maxLength={200}
+              style={{ flex: 1, padding: '10px 14px', fontSize: 13 }} />
+            <button className="btn btn-secondary" onClick={handleAddMemo} disabled={memoSending || !newMemo.trim()}
+              style={{ minHeight: 'auto', padding: '0 16px' }}>기록</button>
+          </div>
+          {eventMemos.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
+              {eventMemos.slice().reverse().map(m => (
+                <p key={m.id} style={{ fontSize: 12, color: 'var(--text2)' }}>
+                  <span style={{ color: 'var(--muted2)' }}>
+                    {new Date(m.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                  </span> {m.content}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ padding: '0 20px', flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)' }}>참여자 목록</p>
@@ -713,6 +826,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             <button onClick={() => setMutualBanner(false)} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48 }}>확인 ✕</button>
           </div>
         </div>
+      )}
+
+      {showKindnessVote && (
+        <KindnessVoteModal candidates={kindnessCandidates} onSubmit={handleKindnessSubmit} submitting={kindnessSubmitting} />
       )}
 
       {warningVisible && (

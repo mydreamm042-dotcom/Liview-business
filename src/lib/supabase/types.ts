@@ -188,6 +188,13 @@ export interface Message {
 // get_operator_dashboard() RPC 응답 (Operator Analytics 도메인, BUSINESS_RULES.md §2.10
 // "Phase 5"). hot_density는 방 화면의 실시간 HOT %와 다른, 지난 영업일 비교 전용 파생값
 // (그 영업일의 HOT 탭 수 / 손님 수)이다.
+// 그날 운영자가 남긴 타임스탬프 메모 (operation_events, Phase 6). 대시보드 그래프 위의
+// 호버/탭 마커로만 쓰인다 — BUSINESS_RULES.md §2.10 "이벤트 노출 위치".
+export interface DashboardEvent {
+  content: string
+  created_at: string
+}
+
 export interface DashboardDailySession {
   room_id: string
   name: string
@@ -199,6 +206,7 @@ export interface DashboardDailySession {
   hot_density: number
   heart_count: number
   alert_count: number
+  events: DashboardEvent[]
 }
 
 export interface DashboardBestDay {

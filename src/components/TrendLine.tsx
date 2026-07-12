@@ -11,6 +11,10 @@ const PLOT_H = VIEW_H - PAD_TOP - PAD_BOTTOM
 export interface TrendPoint {
   date: string
   value: number
+  // 그날 운영자가 남긴 운영 메모 (operation_events, Phase 6, BUSINESS_RULES.md §2.10
+  // "이벤트 노출 위치"). 있으면 그 지점 위에 작은 마커를 그리고, 마우스 오버(데스크톱)/
+  // 탭(모바일) 시 내용을 보여준다. 값 그래프 자체와는 무관한 부가 정보라 optional이다.
+  events?: { content: string; created_at: string }[]
 }
 
 // 단일 지표 추이 라인 차트 (Operator Analytics 도메인, BUSINESS_RULES.md §2.10). 한 화면에
@@ -27,6 +31,7 @@ export default function TrendLine({
   emptyLabel?: string
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [activeEventIndex, setActiveEventIndex] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   if (data.length === 0) {
@@ -96,7 +101,39 @@ export default function TrendLine({
         {/* x축: 시작/끝 날짜만 표시 */}
         <text x={2} y={VIEW_H - 6} fontSize={9} fill="var(--muted2)">{formatDate(data[0].date)}</text>
         <text x={VIEW_W - 2} y={VIEW_H - 6} textAnchor="end" fontSize={9} fill="var(--muted2)">{formatDate(last.date)}</text>
+
+        {/* 운영 메모 마커 — 값 라인과는 별개로, 그날 남긴 메모가 있는 지점 위에만 찍힌다.
+            크로스헤어(hoverIndex)와 독립적인 상태(activeEventIndex)로 토글한다. */}
+        {data.map((d, i) => (d.events && d.events.length > 0) ? (
+          <circle
+            key={i}
+            cx={xAt(i)} cy={8} r={3.5}
+            fill="var(--purple-light)" stroke="var(--bg)" strokeWidth={1}
+            style={{ cursor: 'pointer' }}
+            onPointerDown={e => { e.stopPropagation(); setActiveEventIndex(prev => prev === i ? null : i) }}
+            onMouseEnter={() => setActiveEventIndex(i)}
+            onMouseLeave={() => setActiveEventIndex(prev => prev === i ? null : prev)}
+          />
+        ) : null)}
       </svg>
+
+      {activeEventIndex !== null && data[activeEventIndex].events && (
+        <div style={{
+          position: 'absolute', top: 14, left: `${(xAt(activeEventIndex) / VIEW_W) * 100}%`,
+          transform: `translateX(${activeEventIndex < n / 2 ? '4px' : 'calc(-100% - 4px)'})`,
+          background: 'var(--card2)', border: '1px solid var(--purple-light)', borderRadius: 8,
+          padding: '6px 10px', fontSize: 11, maxWidth: 180, zIndex: 5,
+        }}>
+          <p style={{ color: 'var(--muted2)', marginBottom: 4, fontWeight: 700 }}>{formatDate(data[activeEventIndex].date)} 메모</p>
+          {data[activeEventIndex].events!.map((ev, idx) => (
+            <p key={idx} style={{ color: 'var(--text)', marginTop: idx > 0 ? 4 : 0 }}>
+              <span style={{ color: 'var(--muted2)' }}>
+                {new Date(ev.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+              </span> {ev.content}
+            </p>
+          ))}
+        </div>
+      )}
 
       {hovered && (
         <div style={{

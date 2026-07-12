@@ -58,9 +58,9 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
     return <LoadingScreen />
   }
 
-  const guestSeries = dashboard.daily.map(d => ({ date: d.date, value: d.guest_count }))
-  const starSeries = dashboard.daily.map(d => ({ date: d.date, value: d.avg_star }))
-  const hotSeries = dashboard.daily.map(d => ({ date: d.date, value: d.hot_density }))
+  const guestSeries = dashboard.daily.map(d => ({ date: d.date, value: d.guest_count, events: d.events }))
+  const starSeries = dashboard.daily.map(d => ({ date: d.date, value: d.avg_star, events: d.events }))
+  const hotSeries = dashboard.daily.map(d => ({ date: d.date, value: d.hot_density, events: d.events }))
 
   const rankings: { title: string; items: DashboardBestDay[]; valueKey: 'hot_density' | 'avg_star' | 'guest_count'; unit: string; emoji: string }[] = [
     { title: 'HOT 밀도', items: dashboard.best_by_hot_density, valueKey: 'hot_density', unit: '', emoji: '🔥' },

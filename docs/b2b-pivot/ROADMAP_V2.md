@@ -46,7 +46,7 @@
 | **4.5 (신규 삽입)** | **운영자 정식 회원가입/로그인** — `operator_owner_token` 임시 인증을 Supabase Auth + `operators`/`venues.owner_id`로 전환 | ✅ 완료 |
 | 5 | 운영자 대시보드 | ✅ 완료 |
 | **5.5 (신규 삽입)** | **요일별 영업시간 + 마감시간 기반 자동 마감** — Room 도메인의 "영업 시작=방 생성" 흐름이 "운영자가 종료 버튼을 안 누르면 다음날 영업이 전날 방에 합쳐진다"는 결함을 갖고 있던 걸 정정 | ✅ 완료 |
-| 6 (Staff 추가안 통합) | 이벤트 메모(타임스탬프) + 직원 교대/친절도 평가 | 🔄 진행 중 |
+| 6 (Staff 추가안 통합) | 이벤트 메모(타임스탬프) + 직원 교대/친절도 평가 | ✅ 완료 |
 | 7 (Review 추가안 통합) | 리뷰 유도 + 검증 리뷰(venue_reviews) | 대기 |
 | 8 | Polish & Integration | 대기 |
 
@@ -231,6 +231,13 @@ Phase 1.5/4.5와 같은 이유 — 새 기능이 아니라, "영업 시작=방 �
 - 메모에 사진/첨부파일 등 텍스트 외 형식을 지원할지 — 지금은 텍스트만
 - 친절도 투표 결과를 참여자에게도 공개할지(예: "오늘의 친절왕") 아니면 운영자 전용 집계로만 둘지 — 지금은 운영자 대시보드 집계만 가정, 필요해지면 확인 후 진행
 
+### 구현 완료 요약
+- `supabase/migrations/0011_staff_and_events.sql`, `0012_operation_events_dashboard.sql`
+- 직원 명부: `/operator/settings/[id]/staff` 페이지 + `/api/venues/[id]/staff`
+- 교대 출근/퇴근: 방 화면(운영자 전용) + `/api/rooms/[code]/staff-shifts`
+- 친절도 투표: 참여자 나가기 시 `KindnessVoteModal` + `/api/rooms/[code]/staff-evaluations` (PERSONAL 방·후보 없는 매장은 기존 confirm+즉시 나가기 그대로 유지)
+- 운영 메모: 방 화면(운영자 전용) + `/api/rooms/[code]/events`, `get_operator_dashboard()`의 `daily[].events`를 `TrendLine`이 호버/탭 마커로 표시
+
 ---
 
 ## 다음 단계
@@ -241,6 +248,6 @@ Phase 1.5/4.5와 같은 이유 — 새 기능이 아니라, "영업 시작=방 �
 5. Phase 4.5(운영자 정식 인증) 구현 완료
 6. Phase 5(운영자 대시보드) 구현 완료
 7. Phase 5.5(요일별 영업시간 + 자동 마감) 구현 완료
-8. Phase 6(Staff 교대/친절도 투표 + operation_events 메모) 진행 중
+8. Phase 6(Staff 교대/친절도 투표 + operation_events 메모) 구현 완료
 9. 쿠폰 지급 사양 확정되면 별도 Phase로 진행
 10. Phase 7(Review 도메인) 스코프 확정 후 진행
