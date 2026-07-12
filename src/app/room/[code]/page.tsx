@@ -790,7 +790,14 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             const isMe = p.id === roomData.participantId
             const heartCount = state.heartCounts[p.id] ?? 0
             const warnCount = state.warningCounts[p.id] ?? 0
-            const isHost = idx === 0
+            // BUSINESS 방은 운영자가 "방 화면 보기"를 누른 시점(operator-join)에야 참여자로
+            // 등록되므로, 손님이 먼저 입장하면 도착 순서(idx===0) 기준으로는 손님이 HOST로
+            // 잘못 표시되는 버그가 있었다. participants.is_operator는 operator-join API
+            // (Supabase Auth + venues.owner_id로 이미 신원을 검증한 경로)만 true로 설정할
+            // 수 있는 구조적 플래그라 — 도착 순서나 닉네임 문자열과 무관하게 항상 실제
+            // 운영자만 가리킨다. PERSONAL 방은 운영자 개념이 없으므로 기존처럼 첫 참여자
+            // (방 생성자)를 HOST로 본다.
+            const isHost = state.venue ? p.is_operator === true : idx === 0
             return (
               <div key={p.id} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderColor: isMe ? 'rgba(255,107,107,0.25)' : undefined, background: isMe ? 'rgba(255,107,107,0.05)' : undefined }}>
                 <div style={{ width: 44, height: 44, borderRadius: 14, background: isMe ? 'rgba(255,107,107,0.2)' : 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: isMe ? 'var(--accent)' : 'var(--text2)', flexShrink: 0 }}>

@@ -11,6 +11,12 @@ export async function joinOrReviveParticipant(
   roomId: string,
   nickname: string,
   sessionToken: string,
+  // 이 참여자 행이 "그 매장의 실제 운영자"인지 여부(participants.is_operator). 오직
+  // operator-join API(Supabase Auth + venues.owner_id로 이미 신원을 검증한 경로)만
+  // true를 넘긴다 — 손님이 거치는 join 경로들은 이 인자를 아예 쓰지 않으므로 항상
+  // false로 남는다. 방 화면의 HOST 표시가 도착 순서가 아니라 이 플래그를 근거로
+  // 삼도록 하기 위한 값이다 (닉네임 문자열 비교는 손님이 같은 문자열을 쓰면 무너짐).
+  isOperator = false,
 ) {
   const { data: existing } = await supabase
     .from('participants')
@@ -23,7 +29,7 @@ export async function joinOrReviveParticipant(
   if (existing) {
     const { data: revived } = await supabase
       .from('participants')
-      .update({ left_at: null, nickname })
+      .update({ left_at: null, nickname, is_operator: isOperator })
       .eq('id', existing.id)
       .select()
       .single()
@@ -32,7 +38,7 @@ export async function joinOrReviveParticipant(
 
   const { data: participant, error } = await supabase
     .from('participants')
-    .insert({ room_id: roomId, nickname, session_token: sessionToken })
+    .insert({ room_id: roomId, nickname, session_token: sessionToken, is_operator: isOperator })
     .select()
     .single()
 

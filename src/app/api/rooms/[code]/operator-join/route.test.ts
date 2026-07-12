@@ -59,13 +59,13 @@ describe('POST /api/rooms/[code]/operator-join', () => {
     expect(status).toBe(400)
   })
 
-  it('운영자면 "사장님" 닉네임으로 참여자 등록에 성공한다', async () => {
+  it('운영자면 "사장님" 닉네임 + is_operator=true로 참여자 등록에 성공한다', async () => {
     const fake = makeFakeSupabase(
       [
         { data: { id: 'r1', venue_id: 'v1', status: 'active' } },
         { data: { owner_id: 'u1' } },
         { data: null }, // 기존 참여자 없음 (joinOrReviveParticipant 내부)
-        { data: { id: 'p1', room_id: 'r1', nickname: '사장님', session_token: 's1' } }, // insert
+        { data: { id: 'p1', room_id: 'r1', nickname: '사장님', session_token: 's1', is_operator: true } }, // insert
       ],
       { user: { id: 'u1' } },
     )
@@ -73,6 +73,7 @@ describe('POST /api/rooms/[code]/operator-join', () => {
     const { status, json } = await callPost('ABC123', { session_token: 's1' })
     expect(status).toBe(200)
     expect(json.participant.nickname).toBe('사장님')
+    expect(json.participant.is_operator).toBe(true)
     expect(json.room.host_session).toBeUndefined()
   })
 })

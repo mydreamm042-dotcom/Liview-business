@@ -82,6 +82,9 @@ export interface Participant {
   // Seating 도메인 (BUSINESS_RULES.md §2.8) — BUSINESS 방만 사용, PERSONAL은 항상 null
   seat_id?: string | null
   seat_assigned_at?: string | null
+  // 이 참여자 행이 실제 매장 운영자인지 여부. operator-join API만 true로 설정할 수
+  // 있다 — 방 화면의 HOST 표시가 도착 순서가 아니라 이 값을 근거로 삼는다.
+  is_operator?: boolean
 }
 
 // 요일별 영업시간 (Venue 도메인 확장, BUSINESS_RULES.md §2.2 "요일별 영업시간", Phase 5.5).

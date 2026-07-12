@@ -45,7 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
     return NextResponse.json({ error: '영업 중인 방이 아닙니다' }, { status: 400 })
   }
 
-  const { participant, error } = await joinOrReviveParticipant(supabase, room.id, '사장님', session_token)
+  // isOperator=true — 이 API는 이미 위에서 Supabase Auth + venues.owner_id로 신원을
+  // 검증했으므로, 이 참여자 행에 실제 운영자 플래그를 심을 수 있는 유일한 경로다.
+  const { participant, error } = await joinOrReviveParticipant(supabase, room.id, '사장님', session_token, true)
 
   if (error || !participant) {
     return NextResponse.json({ error: error?.message ?? '입장에 실패했습니다' }, { status: 500 })

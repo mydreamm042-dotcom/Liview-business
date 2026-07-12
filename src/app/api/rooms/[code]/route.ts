@@ -23,9 +23,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   // left_at이 채워진(나간) 참여자도 함께 내려준다 — 결과 페이지 집계에는 필요하고,
   // 방 화면의 참여자 목록은 클라이언트(useRoom)에서 left_at 없는 사람만 걸러 쓴다.
   // seat_id/seat_assigned_at: Seating 도메인(§2.8) — PERSONAL 방은 항상 null
+  // is_operator: 그 참여자 행이 실제 운영자인지 여부 — operator-join API만 true로 설정할
+  // 수 있다. 방 화면의 HOST 표시가 도착 순서가 아니라 이 값을 근거로 삼는다(버그 수정).
   const { data: participants } = await supabase
     .from('participants')
-    .select('id, room_id, joined_at, nickname, left_at, seat_id, seat_assigned_at')
+    .select('id, room_id, joined_at, nickname, left_at, seat_id, seat_assigned_at, is_operator')
     .eq('room_id', room.id)
     .order('joined_at', { ascending: true })
 
