@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
 import { Participant, VenueSeat, Reaction, VenueBranding } from '@/lib/supabase/types'
 import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
+import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 import SeatMap from '@/components/SeatMap'
 
 // 참여자용 자리배치도 — BUSINESS 방은 좌석 선택이 필수다 (BUSINESS_RULES.md §2.8).
@@ -38,9 +39,13 @@ export default function SeatSelectionPage({ params }: { params: Promise<{ code: 
   }, [])
 
   const fetchState = useCallback(async () => {
+    // HOT은 최근 HOT_TOTAL_MS(15분)分만 받는다 — 그보다 오래된 탭은 어차피 감쇠로 0이라
+    // 계산에 영향이 없는데, since 없이 전체 히스토리를 매번 받으면 파티가 길어질수록
+    // (HOT은 연타 특성상 가장 많이 쌓이는 타입) 응답과 재계산 비용이 계속 커진다.
+    const hotSince = new Date(Date.now() - HOT_TOTAL_MS).toISOString()
     const [rRes, hRes] = await Promise.all([
       fetch(`/api/rooms/${code}?session_token=${encodeURIComponent(getSessionToken())}`),
-      myRoomId ? fetch(`/api/reactions?room_id=${myRoomId}&type=hot`) : Promise.resolve(null),
+      myRoomId ? fetch(`/api/reactions?room_id=${myRoomId}&type=hot&since=${encodeURIComponent(hotSince)}`) : Promise.resolve(null),
     ])
     const rData = await rRes.json()
     if (rRes.ok) {

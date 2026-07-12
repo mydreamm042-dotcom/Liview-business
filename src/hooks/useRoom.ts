@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Participant, Reaction, VenueBranding, VenueSeat } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
+import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 
 // 경고/별점 원본 리액션은 쿨타임 카운트다운 UI(최대 30분)에만 쓰이므로, 그보다 오래된
 // 것은 클라이언트 메모리에서 버린다. 안 버리면 파티가 길어질수록 배열이 무한정 자란다.
@@ -102,14 +103,21 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
   }, [roomId, roomCode])
 
   // 3초마다 도는 가벼운 재조회: 전체 reactions를 다시 받는 대신, DB가 미리 집계한
-  // 요약치(하트/경고 수, 평균 별점)와 HOT 원본만 새로 받아온다. 파티가 길어져 reactions가
-  // 아무리 쌓여도 이 폴링 비용은 커지지 않는다. (경고/별점 등 나머지 리액션의 세부 내역은
-  // realtime 구독으로 실시간 갱신되며, 이 재조회는 realtime이 놓친 참여자/HOT/집계치만 복구한다)
+  // 요약치(하트/경고 수, 평균 별점)와 HOT 원본만 새로 받아온다. (경고/별점 등 나머지
+  // 리액션의 세부 내역은 realtime 구독으로 실시간 갱신되며, 이 재조회는 realtime이 놓친
+  // 참여자/HOT/집계치만 복구한다)
+  //
+  // HOT은 반드시 최근 HOT_TOTAL_MS(15분)分만 잘라서 받는다 — simulateHotTaps는 그보다
+  // 오래된 탭을 어차피 0으로 감쇠시켜 계산에 영향을 주지 않으므로, since 없이 전체
+  // 히스토리를 매번 받으면 파티가 길어질수록(HOT은 연타 특성상 리액션 중 가장 많이
+  // 쌓이는 타입) 응답 크기와 그 뒤 hotSim 재계산 비용이 계속 커져 탭할 때마다 버벅이게
+  // 된다 — 이 since 하나로 폴링 비용이 파티 길이와 무관하게 항상 일정해진다.
   const fetchSummary = useCallback(async () => {
+    const hotSince = new Date(Date.now() - HOT_TOTAL_MS).toISOString()
     const [pRes, sRes, hRes] = await Promise.all([
       fetch(`/api/rooms/${roomCode}?session_token=${encodeURIComponent(getSessionToken())}`),
       fetch(`/api/reactions/summary?room_id=${roomId}`),
-      fetch(`/api/reactions?room_id=${roomId}&type=hot`),
+      fetch(`/api/reactions?room_id=${roomId}&type=hot&since=${encodeURIComponent(hotSince)}`),
     ])
 
     const pData = await pRes.json()

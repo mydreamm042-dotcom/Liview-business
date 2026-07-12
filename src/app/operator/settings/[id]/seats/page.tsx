@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getSessionToken } from '@/lib/session'
 import { Participant, VenueSeat, Reaction } from '@/lib/supabase/types'
 import { isOccupantHot } from '@/lib/seatDisplay'
+import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 import SeatBoxContent from '@/components/SeatBoxContent'
 
 interface SessionInfo { id: string; code?: string; status: string }
@@ -58,7 +59,10 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     if (!rRes.ok) return
     const active = (rData.participants ?? []).filter((p: Participant) => !p.left_at)
     setParticipants(active)
-    const hRes = await fetch(`/api/reactions?room_id=${rData.room.id}&type=hot`)
+    // 최근 HOT_TOTAL_MS(15분)分만 받는다 — since 없이 전체 히스토리를 매번 받으면 영업
+    // 시간이 길어질수록(HOT은 연타 특성상 가장 많이 쌓이는 타입) 응답이 계속 커진다.
+    const hotSince = new Date(Date.now() - HOT_TOTAL_MS).toISOString()
+    const hRes = await fetch(`/api/reactions?room_id=${rData.room.id}&type=hot&since=${encodeURIComponent(hotSince)}`)
     const hData = await hRes.json()
     setHotReactions(hData.reactions ?? [])
   }, [sessionToken])
