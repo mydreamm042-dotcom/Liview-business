@@ -118,6 +118,45 @@ export interface OperatorAlert {
   acknowledged_at: string | null
 }
 
+// 매장 직원 명부 (Staff 도메인, BUSINESS_RULES.md §2.4). is_active=false는 소프트 삭제 —
+// 과거 교대 기록/친절도 투표가 이 행을 참조하므로 하드 삭제하지 않는다.
+export interface StaffMember {
+  id: string
+  venue_id: string
+  name: string
+  is_active: boolean
+  created_at: string
+}
+
+// 직원 교대(출근/퇴근) 기록. 방 화면에서 트리거되며 room_id에 직접 귀속된다 — 삭제되지
+// 않는 감사 이력. ended_at이 null이면 현재 근무 중.
+export interface StaffShift {
+  id: string
+  room_id: string
+  staff_id: string
+  started_at: string
+  ended_at: string | null
+}
+
+// 참여자의 직원 친절도 투표 — "가장 친절했던 직원 1명"을 고르는 단일 선택(별점 아님).
+// Room 1회당 참여자 1인 1표.
+export interface StaffEvaluation {
+  id: string
+  room_id: string
+  participant_id: string
+  staff_id: string
+  created_at: string
+}
+
+// 운영자가 방 화면에서 남기는 자유 텍스트 타임스탬프 메모 (Operator Analytics 도메인,
+// BUSINESS_RULES.md §2.10). 사전 정의된 이벤트 타입이 아니다.
+export interface OperationEvent {
+  id: string
+  room_id: string
+  content: string
+  created_at: string
+}
+
 export interface Reaction {
   id: string
   room_id: string

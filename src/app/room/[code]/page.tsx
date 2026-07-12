@@ -13,10 +13,11 @@ import ChatPanel from '@/components/ChatPanel'
 import BrandHeader from '@/components/BrandHeader'
 import SeatMap from '@/components/SeatMap'
 import SeatBoxContent from '@/components/SeatBoxContent'
-import { Participant } from '@/lib/supabase/types'
+import { Participant, StaffMember, StaffShift } from '@/lib/supabase/types'
 import { simulateHotTaps, hotIndexAt, HOT_HOLD_MS, HOT_TOTAL_MS } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS } from '@/lib/cooldown'
 import { isOccupantHot } from '@/lib/seatDisplay'
+import InlineMessage from '@/components/InlineMessage'
 
 function fmtCd(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
@@ -187,6 +188,54 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       return
     }
     if (occupant) setMenuTarget(occupant)
+  }
+
+  // 직원 교대(출근/퇴근) — Staff 도메인, BUSINESS_RULES.md §2.4 "교대 트리거 위치".
+  // Guest Care와 같은 이유로 운영자가 이미 보고 있는 이 방 화면에서 처리한다.
+  // state.isHost가 아니면 전혀 쓰이지 않는다 — 아래 렌더링에서도 호스트에게만 노출한다.
+  const [staffRoster, setStaffRoster] = useState<StaffMember[]>([])
+  const [staffShifts, setStaffShifts] = useState<StaffShift[]>([])
+  const [staffBusyId, setStaffBusyId] = useState<string | null>(null)
+  const [staffError, setStaffError] = useState('')
+
+  useEffect(() => {
+    if (!state.isHost || !state.venue) return
+    fetch(`/api/venues/${state.venue.id}/staff`)
+      .then(res => res.json())
+      .then(data => setStaffRoster(data.staff ?? []))
+      .catch(() => {})
+  }, [state.isHost, state.venue])
+
+  useEffect(() => {
+    if (!state.isHost || !state.venue) return
+    const load = () => {
+      fetch(`/api/rooms/${code}/staff-shifts`)
+        .then(res => res.json())
+        .then(data => setStaffShifts(data.shifts ?? []))
+        .catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, 5_000)
+    return () => clearInterval(interval)
+  }, [state.isHost, state.venue, code])
+
+  const handleToggleShift = async (staffId: string, onShift: boolean) => {
+    setStaffBusyId(staffId)
+    setStaffError('')
+    try {
+      const res = await fetch(`/api/rooms/${code}/staff-shifts`, {
+        method: onShift ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff_id: staffId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setStaffShifts(prev => [...prev.filter(s => s.id !== data.shift.id), data.shift])
+    } catch (e) {
+      setStaffError(e instanceof Error ? e.message : '처리에 실패했습니다')
+    } finally {
+      setStaffBusyId(null)
+    }
   }
 
   // 채팅창이 닫혀 있어도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
@@ -588,6 +637,33 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               height={SEAT_CANVAS_HEIGHT}
             />
           )}
+        </div>
+      )}
+
+      {/* 직원 교대 (Staff 도메인, §2.4) — 운영자 전용. 명부 자체 구성은 설정 화면(직원
+          명부)에서 하고, 여기서는 그 명부를 대상으로 출근/퇴근만 실시간으로 처리한다. */}
+      {state.isHost && state.venue && staffRoster.length > 0 && (
+        <div style={{ padding: '0 20px', marginBottom: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>직원 교대</p>
+          {staffError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{staffError}</InlineMessage>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {staffRoster.map(s => {
+              const onShift = staffShifts.some(sh => sh.staff_id === s.id && !sh.ended_at)
+              return (
+                <div key={s.id} className="card-sm" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</span>
+                  <button
+                    onClick={() => handleToggleShift(s.id, onShift)}
+                    disabled={staffBusyId === s.id}
+                    className={onShift ? 'btn btn-secondary' : 'btn btn-primary'}
+                    style={{ minHeight: 'auto', width: 'auto', padding: '6px 16px', fontSize: 12, opacity: staffBusyId === s.id ? 0.5 : 1 }}
+                  >
+                    {onShift ? '퇴근' : '출근'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

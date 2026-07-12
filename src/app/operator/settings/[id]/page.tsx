@@ -354,6 +354,16 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         <span style={{ color: 'var(--muted2)' }}>→</span>
       </button>
 
+      {/* 직원 명부 (Staff 도메인, §2.4) — 교대 시작/종료는 방 화면에서 처리한다 */}
+      <button className="card" onClick={() => router.push(`/operator/settings/${id}/staff`)}
+        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>👤 직원 명부</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>직원 추가/삭제 — 교대는 방 화면에서 처리해요</p>
+        </div>
+        <span style={{ color: 'var(--muted2)' }}>→</span>
+      </button>
+
       {/* 운영자 대시보드 (Operator Analytics 도메인, §2.10 "Phase 5") */}
       <button className="card" onClick={() => router.push(`/operator/settings/${id}/dashboard`)}
         style={{ padding: 18, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
