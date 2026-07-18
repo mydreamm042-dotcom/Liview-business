@@ -28,7 +28,7 @@ describe('PATCH /api/participants/seat — 참여자 좌석 선택 (BUSINESS_RUL
     expect(status).toBe(404)
   })
 
-  it('PERSONAL 방(venue_id 없음)이면 400', async () => {
+  it('매장이 없는 방(venue_id null)이면 400', async () => {
     const fake = makeFakeSupabase([
       { data: { id: 'p1', room_id: 'r1' } },
       { data: { id: 'r1', venue_id: null } },

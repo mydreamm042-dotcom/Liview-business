@@ -6,8 +6,6 @@ type VenueWithOwner = VenueBranding & { owner_id: string | null }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
-  const { searchParams } = new URL(req.url)
-  const session_token = searchParams.get('session_token')
   const supabase = await createServerSupabaseClient()
 
   const { data: room, error } = await supabase
@@ -22,7 +20,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
   // left_at이 채워진(나간) 참여자도 함께 내려준다 — 결과 페이지 집계에는 필요하고,
   // 방 화면의 참여자 목록은 클라이언트(useRoom)에서 left_at 없는 사람만 걸러 쓴다.
-  // seat_id/seat_assigned_at: Seating 도메인(§2.8) — PERSONAL 방은 항상 null
   // is_operator: 그 참여자 행이 실제 운영자인지 여부 — operator-join API만 true로 설정할
   // 수 있다. 방 화면의 HOST 표시가 도착 순서가 아니라 이 값을 근거로 삼는다(버그 수정).
   const { data: participants } = await supabase
@@ -31,18 +28,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     .eq('room_id', room.id)
     .order('joined_at', { ascending: true })
 
-  // host_session은 호스트 권한 판정용 비밀값이라 클라이언트에 그대로 보내지 않는다
-  // (그대로 보내면 참여자가 devtools로 값을 읽어 호스트인 척 방을 종료시킬 수 있음).
-  // 대신 서버가 여기서 판정한 boolean만 내려준다.
+  // host_session은 이제 "이 세션을 연 운영자 계정 id를 남기는 이력값"일 뿐 권한 판정에
+  // 쓰이지 않지만(§2.11), 그래도 클라이언트에 그대로 보내지 않는다 — 굳이 노출할 이유가
+  // 없는 내부 값이기 때문이다.
   const { host_session, ...safeRoom } = room
   void host_session
 
-  // BUSINESS 방이면 매장 브랜딩 + 좌석 목록을 함께 내려준다. 참여자 화면이 방 이름보다
-  // 매장 브랜딩을 우선 노출하는 데 쓴다. PERSONAL 방은 둘 다 null/빈 배열.
+  // 이 앱은 B2B 전용이라 모든 방은 venue_id를 갖는다(PERSONAL 방 생성 경로는 삭제됨) —
+  // 매장 브랜딩 + 좌석 목록을 항상 함께 내려준다. venue_id가 없는 행은 있을 수 없는
+  // 상태라 방어적으로만 건너뛴다.
   let venue = null
   let seats: unknown[] = []
-  let isHost: boolean
-  if (room.room_type === 'BUSINESS' && room.venue_id) {
+  let isHost = false
+
+  if (room.venue_id) {
     const { data: venueData } = await supabase
       .from('venues')
       .select(
@@ -52,9 +51,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       .eq('id', room.venue_id)
       .maybeSingle<VenueWithOwner>()
 
-    // Operator 도메인(§2.11) 전환 이후 BUSINESS 방의 호스트 판정은 host_session 문자열
-    // 비교가 아니라 "로그인한 이 계정이 이 매장의 owner_id인가"로 한다 — session_token
-    // 쿼리 파라미터는 원래 익명 참여자 세션용이라 실제 로그인 신원과 무관하다.
+    // 호스트 판정은 "로그인한 이 계정이 이 매장의 owner_id인가"로 한다 (Operator 도메인
+    // §2.11) — session_token 쿼리 파라미터는 원래 익명 참여자 세션용이라 실제 로그인
+    // 신원과 무관하다.
     const { data: { user } } = await supabase.auth.getUser()
     isHost = !!user && venueData?.owner_id === user.id
 
@@ -70,9 +69,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       .eq('venue_id', room.venue_id)
       .order('sort_order', { ascending: true })
     seats = seatData ?? []
-  } else {
-    // PERSONAL 방은 기존 그대로 — 익명 session_token과 host_session을 직접 비교한다.
-    isHost = session_token != null && room.host_session === session_token
   }
 
   return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats })
@@ -80,7 +76,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
-  const { host_session, status, name } = await req.json()
+  const { status, name } = await req.json()
   const supabase = await createServerSupabaseClient()
 
   const { data: room } = await supabase
@@ -93,22 +89,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     return NextResponse.json({ error: '방을 찾을 수 없습니다' }, { status: 404 })
   }
 
-  if (room.room_type === 'BUSINESS' && room.venue_id) {
-    // BUSINESS 방은 로그인 세션 + venues.owner_id로 권한을 판정한다 (host_session
-    // 문자열은 더 이상 권한 판정에 쓰이지 않는다 — Operator 도메인 §2.11 전환).
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: venue } = await supabase
-      .from('venues')
-      .select('owner_id')
-      .eq('id', room.venue_id)
-      .maybeSingle()
+  // 로그인 세션 + venues.owner_id로 권한을 판정한다 (Operator 도메인 §2.11).
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: venue } = await supabase
+    .from('venues')
+    .select('owner_id')
+    .eq('id', room.venue_id)
+    .maybeSingle()
 
-    if (!user || venue?.owner_id !== user.id) {
-      return NextResponse.json({ error: '운영자만 이 방을 변경할 수 있습니다' }, { status: 403 })
-    }
-  } else if (room.host_session !== host_session) {
-    // PERSONAL 방은 기존 그대로 — 익명 host_session 문자열 비교.
-    return NextResponse.json({ error: '호스트만 이 방을 변경할 수 있습니다' }, { status: 403 })
+  if (!user || venue?.owner_id !== user.id) {
+    return NextResponse.json({ error: '운영자만 이 방을 변경할 수 있습니다' }, { status: 403 })
   }
 
   const updatePayload: Record<string, unknown> = {}
@@ -123,10 +113,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
   }
 
   if (status) {
-    // BUSINESS 방은 "종료(ended)"가 아니라 "마감(closed)"으로 전이한다. closed 방은
-    // cleanup 삭제 대상이 아니어서 매장 이력으로 영구 보존된다 (BUSINESS_RULES 2.1).
-    // 기존 UI가 보내는 status='ended'를 서버가 매핑하므로 클라이언트 수정 없이도 규칙이 지켜진다.
-    const resolvedStatus = room.room_type === 'BUSINESS' && status === 'ended' ? 'closed' : status
+    // "종료(ended)"가 아니라 "마감(closed)"으로 전이한다. closed 방은 cleanup 삭제
+    // 대상이 아니어서 매장 이력으로 영구 보존된다 (BUSINESS_RULES.md §2.1). 기존 UI가
+    // 보내는 status='ended'를 서버가 매핑하므로 클라이언트 수정 없이도 규칙이 지켜진다.
+    const resolvedStatus = status === 'ended' ? 'closed' : status
     updatePayload.status = resolvedStatus
     if (resolvedStatus === 'ended' || resolvedStatus === 'closed') {
       updatePayload.ended_at = new Date().toISOString()

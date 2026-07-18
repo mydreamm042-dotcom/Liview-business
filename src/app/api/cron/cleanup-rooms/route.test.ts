@@ -21,7 +21,8 @@ async function callGet(headers: Record<string, string> = {}) {
   return { status: res.status, json: await res.json() }
 }
 
-// Phase 5.5 — 하루 1회(새벽 5시) 배치에 PERSONAL 방 정리 + BUSINESS 방 자동 마감을 함께 묶는다
+// Phase 5.5 — 하루 1회(새벽 5시) 배치에 (사실상 no-op인) PERSONAL 방 정리 + BUSINESS 방
+// 자동 마감을 함께 묶는다
 describe('GET /api/cron/cleanup-rooms', () => {
   it('CRON_SECRET이 설정돼 있는데 헤더가 다르면 401', async () => {
     process.env.CRON_SECRET = 'secret'

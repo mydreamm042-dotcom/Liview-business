@@ -83,16 +83,26 @@ Operator Analytics: 위 전체 도메인을 읽기 전용으로 가로질러 재
 
 ## Part 1. 도메인별 Business Rule — 기존 B2C (변경 금지, 그대로 유지)
 
+**2026-07-15 갱신 — B2B 전용 플랫폼 전환**: 이 앱은 이제 B2B 전용이다. PERSONAL(개인 모임)
+방을 만들거나 코드로 직접 입장하는 기능은 삭제됐다 — 개인은 오직 매장 QR 스캔으로만
+참여자로 입장할 수 있다 (`/v/[venueId]`). 그 개인용(데모용) 코드는 별도 GitHub 저장소로
+옮겨졌다. 아래 Part 1은 Room/Participant/Reaction/Atmosphere Index/Mutual Match/Chat/
+End Vote의 **핵심 상호작용 메커니즘**을 원래 B2C 설계 그대로 문서화한 것이며, 이 메커니즘
+자체(하트/HOT/채팅/쌍방매칭)는 지금도 BUSINESS 방에서 변경 없이 그대로 쓰인다 — 실제로
+삭제된 건 §1.1의 "방 생성/코드 입장" 경로(`POST /api/rooms`, `POST /api/rooms/[code]/join`,
+`/create`의 개인 모임 탭, `/join` 화면)뿐이다. 삭제 근거는 ROADMAP_V2.md "B2B 전용 전환"
+섹션 참고.
+
 ### 1.1 Room 도메인
 
 **정의**: 참여자들이 모이는 세션 하나의 생성·상태·생명주기를 책임진다.
 
 | 규칙 | 내용 | 근거 |
 |------|------|------|
-| 방 코드 형식 | 영문 대문자+숫자 6자리, 중복 시 최대 10회 재시도 후 생성 | `src/lib/session.ts` (generateRoomCode), `src/app/api/rooms/route.ts` |
-| 방 생성자 = 호스트 | 방 생성 시 자동으로 닉네임 "호스트"인 참여자 1명이 함께 생성됨 (Participant 도메인과의 경계: Room 생성이 Participant 생성을 트리거) | `src/app/api/rooms/route.ts` |
-| host_session 비공개 | 방 생성/조회 응답에서 `host_session`은 항상 제거 후 반환 (devtools로 탈취해 타인이 호스트 행세하는 것을 방지) | `src/app/api/rooms/route.ts`, `src/app/api/rooms/[code]/join/route.ts` |
-| 방 상태 | `active` → `ended` 2단계. `ended` 방은 입장 불가 | `supabase/schema.sql`, `join/route.ts` |
+| 방 코드 형식 (유지) | 영문 대문자+숫자 6자리, 중복 시 최대 10회 재시도 후 생성. 지금은 `POST /api/venues/[id]/session`(영업 시작)이 생성한다 — `rooms.code`는 여전히 내부 URL 슬러그로 쓰이지만 참여자에게 노출/요구하지 않는다 | `src/lib/session.ts` (generateRoomCode), `src/app/api/venues/[id]/session/route.ts` |
+| ~~방 생성자 = 호스트~~ (삭제됨) | PERSONAL 방 생성 시 자동으로 닉네임 "호스트"인 참여자가 함께 생성되던 규칙 — `POST /api/rooms` 삭제와 함께 없어짐. BUSINESS 방은 방 생성 시점에 참여자가 자동 생성되지 않고, 운영자가 "방 화면 보기"를 눌러야 `operator-join` API가 `is_operator=true` 참여자 행을 만든다 | (삭제됨), 대체: `src/app/api/rooms/[code]/operator-join/route.ts` |
+| host_session 비공개 (유지) | 방 조회 응답에서 `host_session`은 항상 제거 후 반환. 지금은 권한 판정에 쓰이지 않고 "이 세션을 연 운영자 계정 id"를 남기는 이력값일 뿐이지만, 여전히 클라이언트엔 노출하지 않는다 | `src/app/api/rooms/[code]/route.ts` |
+| 방 상태 (BUSINESS 기준으로 갱신) | `active` → `closed` (마감, 영구 보존). `active` → `ended`는 PERSONAL 전용이었고 그 경로가 삭제되어 지금은 도달하지 않는다 | `src/app/api/venues/[id]/session/route.ts` (DELETE) |
 | 자동 정리 (Cleanup) | `ended` 상태로 24시간 경과 시 삭제 / `active` 상태로 2일 경과 시(방치된 방) 삭제. Vercel Cron이 주기 호출 | `supabase/schema.sql` (delete_old_rooms), `src/app/api/cron/cleanup-rooms/route.ts` |
 | 연쇄 삭제 | 방 삭제 시 Participant/Reaction/End Vote/Chat 도메인 데이터가 모두 `ON DELETE CASCADE`로 함께 삭제 (Room이 하위 도메인의 생명주기를 소유) | `supabase/schema.sql` |
 
@@ -102,10 +112,10 @@ Operator Analytics: 위 전체 도메인을 읽기 전용으로 가로질러 재
 
 | 규칙 | 내용 | 근거 |
 |------|------|------|
-| 참여자 유니크 제약 | (room_id, session_token) 유니크 — 동시 이중 입장 요청 레이스를 DB 레벨에서 방지 | `supabase/schema.sql` 주석, `join/route.ts` |
+| 참여자 유니크 제약 | (room_id, session_token) 유니크 — 동시 이중 입장 요청 레이스를 DB 레벨에서 방지 | `supabase/schema.sql` 주석, `src/lib/server/joinParticipant.ts` |
 | 나가기 = Soft Leave | 참여자 "나가기"는 행 삭제가 아니라 `left_at` 타임스탬프만 기록. 삭제 시 Reaction/Chat/End Vote 도메인에 남은 이 참여자 관련 데이터가 연쇄 삭제되어 재입장 시 초기화되는 것을 방지 | `src/app/api/participants/route.ts` (DELETE) |
-| 재입장 = 동일 인물 복귀 | 같은 세션 토큰으로 재입장 시 새 참여자를 만들지 않고 기존 행의 `left_at`을 비우고 닉네임만 갱신 → 받은 하트, 매칭 이력, HOT 기여분이 그대로 유지됨 | `join/route.ts` |
-| 입장 레이스 처리 | 동시 입장 요청으로 유니크 제약(23505) 충돌 시, 실패 처리하지 않고 먼저 생성된 참여자를 그대로 반환 | `join/route.ts` |
+| 재입장 = 동일 인물 복귀 | 같은 세션 토큰으로 재입장 시 새 참여자를 만들지 않고 기존 행의 `left_at`을 비우고 닉네임만 갱신 → 받은 하트, 매칭 이력, HOT 기여분이 그대로 유지됨 | `src/lib/server/joinParticipant.ts` (venue 고정 QR 입장이 공유해서 쓰는 헬퍼) |
+| 입장 레이스 처리 | 동시 입장 요청으로 유니크 제약(23505) 충돌 시, 실패 처리하지 않고 먼저 생성된 참여자를 그대로 반환 | `src/lib/server/joinParticipant.ts` |
 | 참여도 이벤트 1회 기록 | `result_viewed_at`, `chat_opened_at`은 최초 1회만 기록하고 이후 갱신하지 않음 (몇 번 열었는지가 아니라 "열어봤는지/언제 처음"만 필요) | `src/app/api/participants/route.ts` (PATCH) |
 
 ### 1.3 Reaction 도메인

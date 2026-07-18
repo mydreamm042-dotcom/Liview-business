@@ -153,16 +153,11 @@ export default function Home() {
           <div style={{ textAlign: 'center', marginBottom: 4 }}>
             <p style={{ fontSize: 20, fontWeight: 800 }}>👁️ Liview</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <button className="btn btn-secondary" onClick={() => router.push('/join')}>
-              🔗 입장하기
-            </button>
-            <button className="btn btn-secondary" onClick={() => router.push('/discover')}>
-              🔥 실시간 핫한 가게
-            </button>
-          </div>
-          <button className="btn btn-primary" onClick={() => router.push('/create')}>
-            🍻 방 만들기
+          <button className="btn btn-primary" onClick={() => router.push('/discover')}>
+            🔥 실시간 핫한 가게
+          </button>
+          <button className="btn btn-ghost" onClick={() => router.push('/create')} style={{ fontSize: 13 }}>
+            🏪 사장님이신가요? 매장 관리
           </button>
         </div>
       )}

@@ -1,7 +1,10 @@
 // 'closed'는 BUSINESS 방 전용 마감 상태. ended와 달리 cleanup 삭제 대상이 아니며
-// 매장(venue) 이력으로 영구 보존된다. PERSONAL 방은 기존처럼 active → ended만 오간다.
+// 매장(venue) 이력으로 영구 보존된다.
 export type RoomStatus = 'active' | 'ended' | 'closed'
-export type RoomType = 'PERSONAL' | 'BUSINESS'
+// 이 앱은 B2B 전용 플랫폼이다 — 개인 모임(PERSONAL) 방 생성 기능은 삭제됐다(별도
+// 저장소의 데모용 코드로 이전). 컬럼 자체(rooms.room_type)는 과거 데이터 호환을 위해
+// 남겨뒀지만, 새로 만들어지는 방은 전부 BUSINESS다.
+export type RoomType = 'BUSINESS'
 export type ReactionType = 'heart' | 'warning' | 'star' | 'hot'
 
 export interface Room {
