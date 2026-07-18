@@ -207,19 +207,6 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       .catch(() => {})
   }, [state.isHost, state.venue])
 
-  useEffect(() => {
-    if (!state.isHost || !state.venue) return
-    const load = () => {
-      fetch(`/api/rooms/${code}/staff-shifts`)
-        .then(res => res.json())
-        .then(data => setStaffShifts(data.shifts ?? []))
-        .catch(() => {})
-    }
-    load()
-    const interval = setInterval(load, 5_000)
-    return () => clearInterval(interval)
-  }, [state.isHost, state.venue, code])
-
   const handleToggleShift = async (staffId: string, onShift: boolean) => {
     setStaffBusyId(staffId)
     setStaffError('')
@@ -247,12 +234,20 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [memoSending, setMemoSending] = useState(false)
   const [memoError, setMemoError] = useState('')
 
+  // 직원 교대 현황 + 운영 메모는 둘 다 운영자 전용, 같은 5초 주기라 하나의 인터벌로 묶어서
+  // 매 tick마다 왕복 2번 대신 1번(Promise.all)만 나가게 한다 — 방 화면은 이미 리액션/참여자
+  // 요약(3초) + 손님 경고 확인(5초)까지 별도로 폴링하고 있어, 굳이 더 늘릴 이유가 없다.
   useEffect(() => {
     if (!state.isHost || !state.venue) return
     const load = () => {
-      fetch(`/api/rooms/${code}/events`)
-        .then(res => res.json())
-        .then(data => setEventMemos(data.events ?? []))
+      Promise.all([
+        fetch(`/api/rooms/${code}/staff-shifts`).then(res => res.json()),
+        fetch(`/api/rooms/${code}/events`).then(res => res.json()),
+      ])
+        .then(([shiftsData, eventsData]) => {
+          setStaffShifts(shiftsData.shifts ?? [])
+          setEventMemos(eventsData.events ?? [])
+        })
         .catch(() => {})
     }
     load()
