@@ -5,6 +5,17 @@ export interface KakaoMapInstance {
   relayout: () => void
 }
 
+// 카카오 장소 검색(키워드) 결과 1건 — services 라이브러리의 Places.keywordSearch 응답 형식.
+export interface KakaoPlace {
+  id: string
+  place_name: string
+  category_name: string
+  address_name: string
+  road_address_name: string
+  x: string // 경도(lng)
+  y: string // 위도(lat)
+}
+
 declare global {
   interface Window {
     kakao: {
@@ -18,6 +29,16 @@ declare global {
         event: {
           addListener: (target: unknown, type: string, handler: () => void) => void
           trigger: (target: unknown, type: string) => void
+        }
+        services: {
+          Places: new () => {
+            keywordSearch: (
+              keyword: string,
+              callback: (result: KakaoPlace[], status: string) => void,
+              options?: { x?: number; y?: number; radius?: number; size?: number },
+            ) => void
+          }
+          Status: { OK: string; ZERO_RESULT: string; ERROR: string }
         }
       }
     }
@@ -42,7 +63,8 @@ function loadKakaoSdk(): Promise<void> {
       return
     }
     const script = document.createElement('script')
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`
+    // libraries=services: 장소 키워드 검색(Places)을 위해 필요 (Phase 9 지도 검색바)
+    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false&libraries=services`
     script.async = true
     script.onload = () => {
       window.kakao.maps.load(() => resolve())

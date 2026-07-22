@@ -244,6 +244,8 @@ export interface OperatorDashboard {
   weekday_pattern: DashboardWeekdayPattern[]
 }
 
+export type SubscriptionStatus = 'active' | 'inactive'
+
 // get_live_hot_venues() RPC 응답 1건. 의도적으로 room_id/code를 포함하지 않는다 —
 // Discovery 화면은 방 코드/QR을 절대 노출하지 않는다 (BUSINESS_RULES.md §2.6).
 export interface DiscoverVenue {
@@ -257,8 +259,56 @@ export interface DiscoverVenue {
   public_chat_enabled: boolean
   // 입장하기 버튼의 "반경 밖" UX 힌트에만 쓴다 — 실제 판정은 join 시점 서버 체크가 최종 근거
   geofence_radius_m: number
+  // Phase 9 v4: 현재 열려있는 방 유무와 무관하게 등록된 전체 매장을 지도에 표시한다.
+  // is_open=false면 hot_score/satisfaction/heart_count는 0이다 (§2.7 "대상 매장 조건 v4").
+  subscription_status: SubscriptionStatus
+  is_open: boolean
   hot_score: number
   satisfaction: number
+  heart_count: number
   distance_km: number
+}
+
+// get_venue_public_detail() RPC 응답 — 매장 상세 바텀시트(§2.7 "매장 상세 화면 v4").
+// 비참여자도 읽는 공개 데이터라 sender/개인식별 정보는 포함하지 않는다.
+export interface VenuePublicDetail {
+  venue: {
+    id: string
+    name: string
+    category: VenueCategory | null
+    logo_url: string | null
+    hero_image_url: string | null
+    public_chat_enabled: boolean
+    subscription_status: SubscriptionStatus
+    geofence_radius_m: number
+    latitude: number | null
+    longitude: number | null
+  }
+  is_open: boolean
+  opened_at: string | null
+  hot_score: number
+  satisfaction: number
+  heart_count: number
+  participant_count: number
+  seats: { label: string; occupied: boolean }[]
+  hot_timeline: { t: string; count: number }[]
+}
+
+// get_regional_rankings() RPC 응답 — 지역별 TOP10 랭킹(§2.7). 손님 전용 화면.
+export interface RankedVenue {
+  id: string
+  name: string
+  category: VenueCategory | null
+  logo_url: string | null
+  subscription_status: SubscriptionStatus
+  hot_score?: number
+  satisfaction?: number
+  heart_count?: number
+}
+
+export interface RegionalRankings {
+  hot: RankedVenue[]
+  star: RankedVenue[]
+  heart: RankedVenue[]
 }
 
