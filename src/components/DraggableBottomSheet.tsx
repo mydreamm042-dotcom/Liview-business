@@ -136,7 +136,8 @@ export default function DraggableBottomSheet({
         overflow: 'hidden',
       }}
     >
-      {/* 드래그 핸들 + 고정 헤더 — 항상 시트를 드래그한다 */}
+      {/* 드래그 핸들 — 항상 시트를 드래그하는 확실한 손잡이. 이 좁은 영역만 touchAction:none
+          (안에 스크롤할 콘텐츠가 없어 안전). */}
       <div
         onPointerDown={onHandleDown}
         onPointerMove={onHandleMove}
@@ -145,8 +146,22 @@ export default function DraggableBottomSheet({
         style={{ padding: header ? '10px 20px 0' : '10px 20px 6px', cursor: 'grab', flexShrink: 0, touchAction: 'none' }}
       >
         <div style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--muted)', margin: '0 auto' }} />
-        {header && <div style={{ marginTop: 12 }}>{header}</div>}
       </div>
+
+      {/* 고정 헤더 — 핸들과 마찬가지로 드래그되지만, touchAction:none을 걸지 않는다.
+          헤더 안에 가로 스크롤 콘텐츠(카테고리 칩 등)가 있으면 그 요소가 자체적으로
+          stopPropagation해서 드래그 대신 네이티브 가로 스크롤을 쓸 수 있게 하기 위함. */}
+      {header && (
+        <div
+          onPointerDown={onHandleDown}
+          onPointerMove={onHandleMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          style={{ padding: '12px 20px 0', cursor: 'grab', flexShrink: 0 }}
+        >
+          {header}
+        </div>
+      )}
 
       {/* 본문 — full이 아니면 본문 전체가 드래그 면적(스크롤 잠금), full이면 스크롤 */}
       <div

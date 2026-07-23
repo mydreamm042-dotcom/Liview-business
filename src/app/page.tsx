@@ -15,9 +15,11 @@ import HotListSheet from '@/components/HotListSheet'
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
 const TABBAR_H = 66
-// TOP10 랭킹 바텀시트 스냅: collapsed(핸들만) / middle(기본, 홈 느낌) / full(전체).
+// TOP10/HOT 바텀시트 공통 스냅: collapsed(핸들만) / middle / full.
 // 사용자 요구: 중간 지점이 기본값이고 아래로도(collapsed) 위로도(full) 드래그 가능.
 const COLLAPSED_H = 60
+// 카카오맵 레퍼런스처럼, 시트가 full로 올라가도 상단 검색바 아래에서 멈추도록 여백을 둔다.
+const SHEET_TOP_GAP = 104
 const EMPTY_RANKINGS: RegionalRankings = { hot: [], star: [], heart: [] }
 
 export default function Home() {
@@ -30,6 +32,7 @@ export default function Home() {
   const [rankings, setRankings] = useState<RegionalRankings>(EMPTY_RANKINGS)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [sheetSnap, setSheetSnap] = useState(1) // 0=collapsed, 1=middle(기본), 2=full
+  const [hotSnap, setHotSnap] = useState(2) // HOT 목록은 열릴 때 기본 full(카카오맵 레퍼런스와 동일)
   const [activeTab, setActiveTab] = useState<MapTab>('explore')
   const [moreOpen, setMoreOpen] = useState(false)
   // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
@@ -112,9 +115,16 @@ export default function Home() {
     setActiveTab(tab)
     setMoreOpen(false)
     if (tab === 'more') setMoreOpen(true)
+    else if (tab === 'hot') setHotSnap(2) // HOT 열 때마다 기본 full로
     // explore는 지도 + TOP10 시트(현재 위치 유지)로 복귀만 한다 — 시트 스냅을 강제하지 않는다.
-    // hot은 실시간 핫한 가게 목록 오버레이(HotListSheet), enter는 QR 카메라 오버레이를
-    // activeTab 조건으로 렌더한다.
+    // enter는 QR 카메라 오버레이를 activeTab 조건으로 렌더한다.
+  }
+
+  // HOT 목록 시트를 collapsed까지 끌어내리면 "닫기"로 취급해 탐색(지도+TOP10)로 되돌아간다 —
+  // X 버튼 대신 드래그만으로 닫히게(기본 바텀시트와 동일 UX).
+  const handleHotSnapChange = (index: number) => {
+    setHotSnap(index)
+    if (index === 0) setActiveTab('explore')
   }
 
   return (
@@ -148,7 +158,7 @@ export default function Home() {
           collapsed / middle(기본) / full 3단. 우상단에 현위치 버튼이 붙어 함께 움직인다. */}
       {!selectedVenueId && activeTab !== 'hot' && (
         <DraggableBottomSheet
-          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - 80]}
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - SHEET_TOP_GAP]}
           snapIndex={sheetSnap}
           onSnapChange={setSheetSnap}
           bottomOffset={tabBarH}
@@ -169,9 +179,17 @@ export default function Home() {
         </DraggableBottomSheet>
       )}
 
-      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬) 오버레이 */}
+      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬). 기본 바텀시트와 동일하게
+          드래그로 collapsed까지 내리면 닫힘(X 버튼 없음). */}
       {activeTab === 'hot' && !selectedVenueId && (
-        <HotListSheet venues={venues} onSelectVenue={id => setSelectedVenueId(id)} onClose={() => setActiveTab('explore')} />
+        <HotListSheet
+          venues={venues}
+          onSelectVenue={id => setSelectedVenueId(id)}
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.5), viewportH - SHEET_TOP_GAP]}
+          snapIndex={hotSnap}
+          onSnapChange={handleHotSnapChange}
+          bottomOffset={tabBarH}
+        />
       )}
 
       {/* 하단 탭바 */}
