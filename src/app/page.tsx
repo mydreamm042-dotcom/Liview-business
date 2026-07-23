@@ -31,8 +31,8 @@ export default function Home() {
   const [venues, setVenues] = useState<DiscoverVenue[]>([])
   const [rankings, setRankings] = useState<RegionalRankings>(EMPTY_RANKINGS)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
-  const [sheetSnap, setSheetSnap] = useState(1) // 0=collapsed, 1=middle(기본), 2=full
-  const [hotSnap, setHotSnap] = useState(2) // HOT 목록은 열릴 때 기본 full(카카오맵 레퍼런스와 동일)
+  const [sheetSnap, setSheetSnap] = useState(1) // 0=collapsed, 1=middle(기본), 2=full — 탐색(TOP10 랭킹)
+  const [hotSnap, setHotSnap] = useState(1) // HOT 목록도 탐색과 동일하게 기본은 middle
   const [activeTab, setActiveTab] = useState<MapTab>('explore')
   const [moreOpen, setMoreOpen] = useState(false)
   // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
@@ -115,16 +115,9 @@ export default function Home() {
     setActiveTab(tab)
     setMoreOpen(false)
     if (tab === 'more') setMoreOpen(true)
-    else if (tab === 'hot') setHotSnap(2) // HOT 열 때마다 기본 full로
-    // explore는 지도 + TOP10 시트(현재 위치 유지)로 복귀만 한다 — 시트 스냅을 강제하지 않는다.
+    else if (tab === 'hot') setHotSnap(1) // 탐색(TOP10)과 동일하게 기본은 middle
+    // 탐색은 TOP10 랭킹 시트(현재 위치 유지)로 복귀만 한다 — 시트 스냅을 강제하지 않는다.
     // enter는 QR 카메라 오버레이를 activeTab 조건으로 렌더한다.
-  }
-
-  // HOT 목록 시트를 collapsed까지 끌어내리면 "닫기"로 취급해 탐색(지도+TOP10)로 되돌아간다 —
-  // X 버튼 대신 드래그만으로 닫히게(기본 바텀시트와 동일 UX).
-  const handleHotSnapChange = (index: number) => {
-    setHotSnap(index)
-    if (index === 0) setActiveTab('explore')
   }
 
   return (
@@ -179,15 +172,15 @@ export default function Home() {
         </DraggableBottomSheet>
       )}
 
-      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬). 기본 바텀시트와 동일하게
-          드래그로 collapsed까지 내리면 닫힘(X 버튼 없음). */}
+      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬). 탐색(TOP10)과 별개 화면이며,
+          탐색으로 자동 전환되지 않는다 — collapsed로 내려도 계속 HOT 탭에 머문다. */}
       {activeTab === 'hot' && !selectedVenueId && (
         <HotListSheet
           venues={venues}
           onSelectVenue={id => setSelectedVenueId(id)}
-          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.5), viewportH - SHEET_TOP_GAP]}
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - SHEET_TOP_GAP]}
           snapIndex={hotSnap}
-          onSnapChange={handleHotSnapChange}
+          onSnapChange={setHotSnap}
           bottomOffset={tabBarH}
         />
       )}
