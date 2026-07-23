@@ -13,6 +13,7 @@ import MapBottomTabBar, { MapTab } from '@/components/MapBottomTabBar'
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
 const TABBAR_H = 66
+const PEEK_H = 220 // 지역 랭킹 바텀시트의 peek(기본) 높이 — 현위치 버튼을 이 위로 띄운다
 const EMPTY_RANKINGS: RegionalRankings = { hot: [], star: [], heart: [] }
 
 export default function Home() {
@@ -122,16 +123,25 @@ export default function Home() {
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* 현재 위치로 이동 */}
-        <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
-          style={{
-            position: 'absolute', right: 16, bottom: TABBAR_H + 190, zIndex: 24, width: 44, height: 44, borderRadius: 999,
-            background: 'var(--card)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 20, cursor: 'pointer', opacity: geoStatus === 'loading' ? 0.5 : 1,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          }}>
-          {geoStatus === 'loading' ? '⏳' : '🎯'}
-        </button>
+        {/* 현재 위치로 이동 — peek 바텀시트에 가리지 않도록 시트 상단 바로 위에 띄운다.
+            디자인의 검은 원 + 빨간 내비게이션 화살표 스타일. 상세 시트가 열려있을 땐 숨긴다. */}
+        {!selectedVenueId && (
+          <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
+            style={{
+              position: 'absolute', right: 16, bottom: TABBAR_H + PEEK_H + 14, zIndex: 24, width: 46, height: 46,
+              borderRadius: 999, background: '#000', border: '1px solid var(--border)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+            }}>
+            {geoStatus === 'loading' ? (
+              <span style={{ fontSize: 18 }}>⏳</span>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ transform: 'rotate(0deg)' }}>
+                <path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* 장소 검색바 */}
@@ -151,7 +161,7 @@ export default function Home() {
       {/* 지역 랭킹 드래그 바텀시트 (상세가 닫혀있을 때만) */}
       {!selectedVenueId && (
         <DraggableBottomSheet
-          snapPoints={[220, viewportH - 80]}
+          snapPoints={[PEEK_H, viewportH - 80]}
           snapIndex={sheetSnap}
           onSnapChange={setSheetSnap}
           bottomOffset={TABBAR_H}
