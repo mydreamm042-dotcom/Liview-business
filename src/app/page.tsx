@@ -9,11 +9,14 @@ import DraggableBottomSheet from '@/components/DraggableBottomSheet'
 import RegionRanking from '@/components/RegionRanking'
 import PlaceSearchBar from '@/components/PlaceSearchBar'
 import MapBottomTabBar, { MapTab } from '@/components/MapBottomTabBar'
+import QRScanner from '@/components/QRScanner'
 
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
 const TABBAR_H = 66
-const PEEK_H = 220 // 지역 랭킹 바텀시트의 peek(기본) 높이 — 현위치 버튼을 이 위로 띄운다
+// 바텀시트 스냅: collapsed(핸들만 보임, 지도 최대) → full(실시간 핫한 가게 전체).
+// 사용자 요구 "끝까지 내려갈 수 있게" — collapsed가 가장 아래 상태다.
+const COLLAPSED_H = 60
 const EMPTY_RANKINGS: RegionalRankings = { hot: [], star: [], heart: [] }
 
 export default function Home() {
@@ -25,7 +28,7 @@ export default function Home() {
   const [venues, setVenues] = useState<DiscoverVenue[]>([])
   const [rankings, setRankings] = useState<RegionalRankings>(EMPTY_RANKINGS)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
-  const [sheetSnap, setSheetSnap] = useState(0) // 0=peek, 1=full
+  const [sheetSnap, setSheetSnap] = useState(0) // 0=collapsed, 1=full
   const [activeTab, setActiveTab] = useState<MapTab>('explore')
   const [moreOpen, setMoreOpen] = useState(false)
   // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
@@ -105,10 +108,10 @@ export default function Home() {
   const handleTab = (tab: MapTab) => {
     setActiveTab(tab)
     setMoreOpen(false)
-    if (tab === 'explore') setSheetSnap(0)
-    else if (tab === 'hot') setSheetSnap(1)
-    else if (tab === 'enter') { /* 입장은 매장 QR로만 — 안내만 */ setMoreOpen(false) }
+    if (tab === 'explore') setSheetSnap(0)          // 지도 보기 — 시트 내림
+    else if (tab === 'hot') setSheetSnap(1)          // 실시간 핫한 가게 — 시트 펼침
     else if (tab === 'more') setMoreOpen(true)
+    // enter는 QR 카메라 오버레이를 띄운다 (activeTab==='enter' 조건으로 렌더)
   }
 
   return (
@@ -123,12 +126,12 @@ export default function Home() {
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* 현재 위치로 이동 — peek 바텀시트에 가리지 않도록 시트 상단 바로 위에 띄운다.
-            디자인의 검은 원 + 빨간 내비게이션 화살표 스타일. 상세 시트가 열려있을 땐 숨긴다. */}
+        {/* 현재 위치로 이동 — collapsed 시트(핸들) 바로 위에 띄운다. 디자인의 검은 원 +
+            빨간 내비게이션 화살표. 상세 시트가 열려있을 땐 숨긴다. */}
         {!selectedVenueId && (
           <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
             style={{
-              position: 'absolute', right: 16, bottom: TABBAR_H + PEEK_H + 14, zIndex: 24, width: 46, height: 46,
+              position: 'absolute', right: 16, bottom: TABBAR_H + COLLAPSED_H + 14, zIndex: 24, width: 46, height: 46,
               borderRadius: 999, background: '#000', border: '1px solid var(--border)', display: 'flex',
               alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
@@ -136,7 +139,7 @@ export default function Home() {
             {geoStatus === 'loading' ? (
               <span style={{ fontSize: 18 }}>⏳</span>
             ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ transform: 'rotate(0deg)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" />
               </svg>
             )}
@@ -158,17 +161,19 @@ export default function Home() {
         <VenueDetailSheet venueId={selectedVenueId} distanceKm={selectedDistanceKm} onClose={() => setSelectedVenueId(null)} />
       )}
 
-      {/* 지역 랭킹 드래그 바텀시트 (상세가 닫혀있을 때만) */}
+      {/* 실시간 핫한 가게 드래그 바텀시트 (상세가 닫혀있을 때만).
+          collapsed(핸들만) ↔ full(전체). 끝까지 내려가면 지도만 보인다. */}
       {!selectedVenueId && (
         <DraggableBottomSheet
-          snapPoints={[PEEK_H, viewportH - 80]}
+          snapPoints={[COLLAPSED_H, viewportH - 80]}
           snapIndex={sheetSnap}
           onSnapChange={setSheetSnap}
           bottomOffset={TABBAR_H}
           header={
-            <div style={{ paddingBottom: 12 }}>
-              <p style={{ fontSize: 18, fontWeight: 800 }}>🔥 지금 핫한 가게</p>
-            </div>
+            <button onClick={() => setSheetSnap(sheetSnap === 0 ? 1 : 0)}
+              style={{ background: 'none', border: 'none', padding: '0 0 12px', cursor: 'pointer', display: 'block', width: '100%', textAlign: 'left' }}>
+              <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>🔥 실시간 핫한 가게</p>
+            </button>
           }
         >
           <RegionRanking rankings={rankings} regionLabel="내 주변" onSelectVenue={id => setSelectedVenueId(id)} />
@@ -178,32 +183,21 @@ export default function Home() {
       {/* 하단 탭바 */}
       <MapBottomTabBar active={activeTab} onSelect={handleTab} />
 
-      {/* 더보기 메뉴 */}
+      {/* 더보기 메뉴 — 전체 목록 보기는 HOT 탭(바텀시트)으로 이동, 여기엔 사장님 진입만 둔다 */}
       {moreOpen && (
         <div onClick={() => setMoreOpen(false)}
           style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}>
           <div onClick={e => e.stopPropagation()}
             style={{ width: '100%', background: 'var(--bg)', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--muted)', margin: '0 auto 12px' }} />
-            <button className="btn btn-secondary" onClick={() => router.push('/discover')}>📋 전체 목록 보기</button>
             <button className="btn btn-ghost" onClick={() => router.push('/create')} style={{ fontSize: 14 }}>🏪 사장님이신가요? 매장 관리</button>
           </div>
         </div>
       )}
 
-      {/* 입장 안내 */}
-      {activeTab === 'enter' && !moreOpen && !selectedVenueId && (
-        <div onClick={() => setActiveTab('explore')}
-          style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} className="card animate-fade-in" style={{ padding: 28, textAlign: 'center', maxWidth: 320 }}>
-            <p style={{ fontSize: 32, marginBottom: 8 }}>🚪</p>
-            <p style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>매장 QR로 입장해요</p>
-            <p style={{ fontSize: 13, color: 'var(--muted2)', lineHeight: 1.6 }}>
-              LIview는 실제 방문 후 매장에 비치된 QR을 스캔해야 입장할 수 있어요. 원격 참여는 지원하지 않아요.
-            </p>
-            <button className="btn btn-primary" onClick={() => setActiveTab('explore')} style={{ marginTop: 20 }}>알겠어요</button>
-          </div>
-        </div>
+      {/* 입장 — QR 스캔 카메라 */}
+      {activeTab === 'enter' && !selectedVenueId && (
+        <QRScanner onClose={() => setActiveTab('explore')} />
       )}
     </main>
   )
