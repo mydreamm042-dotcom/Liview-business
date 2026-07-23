@@ -10,12 +10,13 @@ import RegionRanking from '@/components/RegionRanking'
 import PlaceSearchBar from '@/components/PlaceSearchBar'
 import MapBottomTabBar, { MapTab } from '@/components/MapBottomTabBar'
 import QRScanner from '@/components/QRScanner'
+import HotListSheet from '@/components/HotListSheet'
 
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
 const TABBAR_H = 66
-// 바텀시트 스냅: collapsed(핸들만 보임, 지도 최대) → full(실시간 핫한 가게 전체).
-// 사용자 요구 "끝까지 내려갈 수 있게" — collapsed가 가장 아래 상태다.
+// TOP10 랭킹 바텀시트 스냅: collapsed(핸들만) / middle(기본, 홈 느낌) / full(전체).
+// 사용자 요구: 중간 지점이 기본값이고 아래로도(collapsed) 위로도(full) 드래그 가능.
 const COLLAPSED_H = 60
 const EMPTY_RANKINGS: RegionalRankings = { hot: [], star: [], heart: [] }
 
@@ -28,7 +29,7 @@ export default function Home() {
   const [venues, setVenues] = useState<DiscoverVenue[]>([])
   const [rankings, setRankings] = useState<RegionalRankings>(EMPTY_RANKINGS)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
-  const [sheetSnap, setSheetSnap] = useState(0) // 0=collapsed, 1=full
+  const [sheetSnap, setSheetSnap] = useState(1) // 0=collapsed, 1=middle(기본), 2=full
   const [activeTab, setActiveTab] = useState<MapTab>('explore')
   const [moreOpen, setMoreOpen] = useState(false)
   // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
@@ -108,10 +109,10 @@ export default function Home() {
   const handleTab = (tab: MapTab) => {
     setActiveTab(tab)
     setMoreOpen(false)
-    if (tab === 'explore') setSheetSnap(0)          // 지도 보기 — 시트 내림
-    else if (tab === 'hot') setSheetSnap(1)          // 실시간 핫한 가게 — 시트 펼침
-    else if (tab === 'more') setMoreOpen(true)
-    // enter는 QR 카메라 오버레이를 띄운다 (activeTab==='enter' 조건으로 렌더)
+    if (tab === 'more') setMoreOpen(true)
+    // explore는 지도 + TOP10 시트(현재 위치 유지)로 복귀만 한다 — 시트 스냅을 강제하지 않는다.
+    // hot은 실시간 핫한 가게 목록 오버레이(HotListSheet), enter는 QR 카메라 오버레이를
+    // activeTab 조건으로 렌더한다.
   }
 
   return (
@@ -125,26 +126,6 @@ export default function Home() {
           </div>
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
-
-        {/* 현재 위치로 이동 — collapsed 시트(핸들) 바로 위에 띄운다. 디자인의 검은 원 +
-            빨간 내비게이션 화살표. 상세 시트가 열려있을 땐 숨긴다. */}
-        {!selectedVenueId && (
-          <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
-            style={{
-              position: 'absolute', right: 16, bottom: TABBAR_H + COLLAPSED_H + 14, zIndex: 24, width: 46, height: 46,
-              borderRadius: 999, background: '#000', border: '1px solid var(--border)', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
-            }}>
-            {geoStatus === 'loading' ? (
-              <span style={{ fontSize: 18 }}>⏳</span>
-            ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" />
-              </svg>
-            )}
-          </button>
-        )}
       </div>
 
       {/* 장소 검색바 */}
@@ -161,23 +142,39 @@ export default function Home() {
         <VenueDetailSheet venueId={selectedVenueId} distanceKm={selectedDistanceKm} onClose={() => setSelectedVenueId(null)} />
       )}
 
-      {/* 실시간 핫한 가게 드래그 바텀시트 (상세가 닫혀있을 때만).
-          collapsed(핸들만) ↔ full(전체). 끝까지 내려가면 지도만 보인다. */}
-      {!selectedVenueId && (
+      {/* TOP10 랭킹 바텀시트 (상세/HOT 오버레이가 닫혀있을 때만).
+          collapsed / middle(기본) / full 3단. 우상단에 현위치 버튼이 붙어 함께 움직인다. */}
+      {!selectedVenueId && activeTab !== 'hot' && (
         <DraggableBottomSheet
-          snapPoints={[COLLAPSED_H, viewportH - 80]}
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - 80]}
           snapIndex={sheetSnap}
           onSnapChange={setSheetSnap}
           bottomOffset={TABBAR_H}
-          header={
-            <button onClick={() => setSheetSnap(sheetSnap === 0 ? 1 : 0)}
-              style={{ background: 'none', border: 'none', padding: '0 0 12px', cursor: 'pointer', display: 'block', width: '100%', textAlign: 'left' }}>
-              <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>🔥 실시간 핫한 가게</p>
+          floating={
+            <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
+              style={{
+                width: 46, height: 46, borderRadius: 999, background: '#000', border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+              }}>
+              {geoStatus === 'loading'
+                ? <span style={{ fontSize: 18 }}>⏳</span>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" /></svg>}
             </button>
+          }
+          header={
+            <div style={{ paddingBottom: 12 }}>
+              <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>🔥 지금 핫한 가게</p>
+            </div>
           }
         >
           <RegionRanking rankings={rankings} regionLabel="내 주변" onSelectVenue={id => setSelectedVenueId(id)} />
         </DraggableBottomSheet>
+      )}
+
+      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬) 오버레이 */}
+      {activeTab === 'hot' && !selectedVenueId && (
+        <HotListSheet venues={venues} onSelectVenue={id => setSelectedVenueId(id)} onClose={() => setActiveTab('explore')} />
       )}
 
       {/* 하단 탭바 */}

@@ -14,6 +14,7 @@ export default function DraggableBottomSheet({
   children,
   header,
   bottomOffset = 0,
+  floating,
 }: {
   snapPoints: number[]
   initialSnap?: number
@@ -25,6 +26,9 @@ export default function DraggableBottomSheet({
   header?: ReactNode
   // 하단 탭바 등에 가리지 않도록 시트 바닥을 그만큼 띄운다
   bottomOffset?: number
+  // 시트 우상단(시트 top 바로 위)에 붙어 시트와 함께 움직이는 버튼 — 현위치 버튼 등.
+  // 시트가 거의 full로 올라가면 자동으로 숨긴다(상단 검색바와 겹침 방지).
+  floating?: ReactNode
 }) {
   const sorted = [...snapPoints].sort((a, b) => a - b)
   const maxSnap = sorted[sorted.length - 1]
@@ -80,7 +84,21 @@ export default function DraggableBottomSheet({
     setVisible(v => Math.max(minSnap, Math.min(maxSnap, v)))
   }, [minSnap, maxSnap])
 
+  const floatingHidden = visible > maxSnap * 0.82
+
   return (
+    <>
+      {/* 시트 top 바로 위에 붙어 시트와 함께 움직이는 플로팅 버튼 (overflow:hidden 시트 바깥에
+          별도 렌더해야 잘리지 않는다). full 근처에서는 숨긴다. */}
+      {floating && (
+        <div style={{
+          position: 'absolute', right: 16, bottom: bottomOffset + visible + 12, zIndex: 29,
+          transition: dragging ? 'none' : 'bottom 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s',
+          opacity: floatingHidden ? 0 : 1, pointerEvents: floatingHidden ? 'none' : 'auto',
+        }}>
+          {floating}
+        </div>
+      )}
     <div
       style={{
         position: 'absolute', left: 0, right: 0, bottom: bottomOffset, zIndex: 30,
@@ -114,5 +132,6 @@ export default function DraggableBottomSheet({
         {children}
       </div>
     </div>
+    </>
   )
 }
