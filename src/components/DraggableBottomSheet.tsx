@@ -37,6 +37,8 @@ export default function DraggableBottomSheet({
   const [visible, setVisible] = useState(sorted[Math.min(initialSnap, sorted.length - 1)])
   const [dragging, setDragging] = useState(false)
   const dragState = useRef<{ startY: number; startVisible: number } | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const atFull = visible >= maxSnap - 1
 
   // 외부 제어: snapIndex prop이 바뀌면 해당 스냅으로 이동한다 (드래그와 별개 경로).
   useEffect(() => {
@@ -58,25 +60,45 @@ export default function DraggableBottomSheet({
     onSnapChange?.(sorted.indexOf(nearest))
   }
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    dragState.current = { startY: e.clientY, startVisible: visible }
+  const beginDrag = (clientY: number) => {
+    dragState.current = { startY: clientY, startVisible: visible }
     setDragging(true)
-    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
   }
-
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const moveSheet = (clientY: number) => {
     if (!dragState.current) return
-    const delta = e.clientY - dragState.current.startY
+    const delta = clientY - dragState.current.startY
     // 아래로 끌면(delta>0) 보이는 높이가 줄고, 위로 끌면 늘어난다
-    const next = Math.max(minSnap, Math.min(maxSnap, dragState.current.startVisible - delta))
-    setVisible(next)
+    setVisible(Math.max(minSnap, Math.min(maxSnap, dragState.current.startVisible - delta)))
   }
-
   const endDrag = () => {
     if (!dragState.current) return
     dragState.current = null
     setDragging(false)
     snapTo(visible)
+  }
+
+  // 핸들/헤더 영역 — 항상 시트를 드래그한다 (포인터 캡처로 안정적으로).
+  const onHandleDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    beginDrag(e.clientY)
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+  }
+  const onHandleMove = (e: ReactPointerEvent<HTMLDivElement>) => moveSheet(e.clientY)
+
+  // 본문 영역 — full이 아닐 때는 본문 전체가 드래그 면적이 된다(카카오/네이버처럼 넓게).
+  // full일 때만 본문이 스크롤되고, 스크롤 최상단에서 아래로 끌면 시트가 접힌다.
+  const onBodyDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    beginDrag(e.clientY)
+    if (!atFull) (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+  }
+  const onBodyMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragState.current) return
+    const delta = e.clientY - dragState.current.startY
+    if (atFull) {
+      const st = bodyRef.current?.scrollTop ?? 0
+      // full 상태에서 내용이 스크롤돼 있거나 위로 끌어올리는 중이면 네이티브 스크롤에 맡긴다
+      if (st > 0 || delta < 0) return
+    }
+    moveSheet(e.clientY)
   }
 
   // 화면 리사이즈 등으로 스냅 배열이 바뀌면 현재 값을 범위 안으로 다시 보정
@@ -111,24 +133,33 @@ export default function DraggableBottomSheet({
         border: '1px solid var(--border)',
         borderBottom: 'none',
         display: 'flex', flexDirection: 'column',
-        touchAction: 'none',
         overflow: 'hidden',
       }}
     >
-      {/* 드래그 핸들 + 고정 헤더 — 이 영역에서만 제스처를 받는다 (내부 스크롤과 충돌 방지) */}
+      {/* 드래그 핸들 + 고정 헤더 — 항상 시트를 드래그한다 */}
       <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        onPointerDown={onHandleDown}
+        onPointerMove={onHandleMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        style={{ padding: '10px 20px 0', cursor: 'grab', flexShrink: 0 }}
+        style={{ padding: header ? '10px 20px 0' : '10px 20px 6px', cursor: 'grab', flexShrink: 0, touchAction: 'none' }}
       >
-        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--muted)', margin: '0 auto 12px' }} />
-        {header}
+        <div style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--muted)', margin: '0 auto' }} />
+        {header && <div style={{ marginTop: 12 }}>{header}</div>}
       </div>
 
-      {/* 스크롤 가능한 본문 */}
-      <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 0 24px' }}>
+      {/* 본문 — full이 아니면 본문 전체가 드래그 면적(스크롤 잠금), full이면 스크롤 */}
+      <div
+        ref={bodyRef}
+        onPointerDown={onBodyDown}
+        onPointerMove={onBodyMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          flex: 1, overflowY: atFull ? 'auto' : 'hidden', overscrollBehavior: 'contain',
+          padding: '0 0 24px', touchAction: atFull ? 'pan-y' : 'none', cursor: 'grab',
+        }}
+      >
         {children}
       </div>
     </div>

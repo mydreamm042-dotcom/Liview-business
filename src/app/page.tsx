@@ -34,6 +34,8 @@ export default function Home() {
   const [moreOpen, setMoreOpen] = useState(false)
   // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
   const [viewportH, setViewportH] = useState(720)
+  // 탭바 실제 높이(safe-area 포함) — 바텀시트를 이 위에 틈 없이 붙인다.
+  const [tabBarH, setTabBarH] = useState(TABBAR_H)
 
   useEffect(() => {
     const update = () => setViewportH(window.innerHeight)
@@ -149,7 +151,7 @@ export default function Home() {
           snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - 80]}
           snapIndex={sheetSnap}
           onSnapChange={setSheetSnap}
-          bottomOffset={TABBAR_H}
+          bottomOffset={tabBarH}
           floating={
             <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
               style={{
@@ -162,11 +164,6 @@ export default function Home() {
                 : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" /></svg>}
             </button>
           }
-          header={
-            <div style={{ paddingBottom: 12 }}>
-              <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>🔥 지금 핫한 가게</p>
-            </div>
-          }
         >
           <RegionRanking rankings={rankings} regionLabel="내 주변" onSelectVenue={id => setSelectedVenueId(id)} />
         </DraggableBottomSheet>
@@ -178,7 +175,7 @@ export default function Home() {
       )}
 
       {/* 하단 탭바 */}
-      <MapBottomTabBar active={activeTab} onSelect={handleTab} />
+      <MapBottomTabBar active={activeTab} onSelect={handleTab} onHeightChange={setTabBarH} />
 
       {/* 더보기 메뉴 — 전체 목록 보기는 HOT 탭(바텀시트)으로 이동, 여기엔 사장님 진입만 둔다 */}
       {moreOpen && (

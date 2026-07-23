@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactElement } from 'react'
+import { ReactElement, useEffect, useRef } from 'react'
 
 // 지도 화면 전용 하단 탭바 (Phase 9). 전역 네비게이션이 아니라 홈 지도 화면 로컬 컴포넌트다.
 // 탐색: 지도 보기(바텀시트 내림) / HOT: 실시간 핫한 가게(바텀시트 펼침) / 입장: QR 카메라 /
@@ -52,12 +52,25 @@ const TABS: { key: MapTab; label: string; Icon: (p: { color: string }) => React.
   { key: 'more', label: '더보기', Icon: MoreIcon },
 ]
 
-export default function MapBottomTabBar({ active, onSelect }: {
+export default function MapBottomTabBar({ active, onSelect, onHeightChange }: {
   active: MapTab
   onSelect: (tab: MapTab) => void
+  // 실제 렌더 높이(safe-area 포함)를 부모에 알려, 바텀시트가 탭바 위에 틈 없이 붙게 한다.
+  onHeightChange?: (h: number) => void
 }) {
+  const navRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = navRef.current
+    if (!el || !onHeightChange) return
+    const report = () => onHeightChange(el.offsetHeight)
+    report()
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [onHeightChange])
+
   return (
-    <nav style={{
+    <nav ref={navRef} style={{
       position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 40,
       display: 'flex', background: 'var(--bg)', borderTop: '1px solid var(--border)',
       padding: '10px 0 max(10px, env(safe-area-inset-bottom))',
