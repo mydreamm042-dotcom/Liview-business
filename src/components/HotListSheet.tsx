@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, ReactNode, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { DiscoverVenue, VenueCategory } from '@/lib/supabase/types'
 import DraggableBottomSheet from '@/components/DraggableBottomSheet'
 
@@ -15,6 +15,48 @@ const CATEGORIES: { value: VenueCategory | 'all'; label: string }[] = [
 ]
 
 type SortKey = 'hot' | 'distance' | 'star'
+
+// 카테고리 칩의 가로 스크롤. 이 컴포넌트는 시트 헤더(touchAction:none) 안에 있어서 브라우저
+// 네이티브 스크롤은 절대 동작하지 않는다 — CSS touch-action은 조상 중 하나라도 none이면
+// 자식이 pan-x를 선언해도 무시되는 교집합 규칙이라(스펙), 대신 포인터 이벤트로 scrollLeft를
+// 직접 움직이는 자체 드래그 스크롤을 구현한다. 드래그가 실제로 있었으면(임계값 이상 이동)
+// 그 뒤의 클릭은 눌러서 카테고리가 바뀌는 걸 막는다(드래그 끝에 버튼이 눌리는 것 방지).
+function CategoryScroller({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    drag.current = { startX: e.clientX, startScrollLeft: ref.current?.scrollLeft ?? 0, moved: false }
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+  }
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    if (!drag.current || !ref.current) return
+    const delta = e.clientX - drag.current.startX
+    if (Math.abs(delta) > 4) drag.current.moved = true
+    ref.current.scrollLeft = drag.current.startScrollLeft - delta
+  }
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => { e.stopPropagation() }
+  const onClickCapture = (e: ReactMouseEvent) => {
+    if (drag.current?.moved) { e.preventDefault(); e.stopPropagation() }
+    drag.current = null
+  }
+
+  return (
+    <div
+      ref={ref}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      onClickCapture={onClickCapture}
+      style={{ display: 'flex', gap: 6, overflowX: 'hidden', paddingBottom: 10, cursor: 'grab' }}
+    >
+      {children}
+    </div>
+  )
+}
 
 // HOT 탭 — "실시간 핫한 가게" 전체 목록(카테고리 필터 + 정렬). TOP10 랭킹과는 별개로,
 // 매장들을 카테고리/HOT/거리/별점으로 더 세밀하게 정렬해 보는 화면(원래 더보기의 카테고리 창).
@@ -52,24 +94,19 @@ export default function HotListSheet({
         <div>
           <p style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>🔥 실시간 핫한 가게</p>
 
-          {/* 카테고리 필터 — 시트 드래그와 가로 스크롤이 충돌하지 않도록, 이 영역의 포인터
-              이벤트가 상위(헤더 드래그 핸들러)로 전파되지 않게 막는다. */}
-          <div
-            onPointerDownCapture={e => e.stopPropagation()}
-            onPointerMoveCapture={e => e.stopPropagation()}
-            style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, scrollbarWidth: 'none', touchAction: 'pan-x' }}
-          >
+          {/* 카테고리 필터 — 자체 드래그 스크롤(CategoryScroller 참고) */}
+          <CategoryScroller>
             {CATEGORIES.map(c => (
               <button key={c.value} onClick={() => setCategory(c.value)}
                 style={{
-                  padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  flexShrink: 0, padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 12, fontWeight: 700,
                   background: category === c.value ? 'var(--accent)' : 'var(--card2)',
                   border: '1px solid var(--border)', color: category === c.value ? '#fff' : 'var(--muted2)',
                 }}>
                 {c.label}
               </button>
             ))}
-          </div>
+          </CategoryScroller>
 
           {/* 정렬 */}
           <div style={{ display: 'flex', gap: 14, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>

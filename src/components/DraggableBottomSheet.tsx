@@ -148,16 +148,18 @@ export default function DraggableBottomSheet({
         <div style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--muted)', margin: '0 auto' }} />
       </div>
 
-      {/* 고정 헤더 — 핸들과 마찬가지로 드래그되지만, touchAction:none을 걸지 않는다.
-          헤더 안에 가로 스크롤 콘텐츠(카테고리 칩 등)가 있으면 그 요소가 자체적으로
-          stopPropagation해서 드래그 대신 네이티브 가로 스크롤을 쓸 수 있게 하기 위함. */}
+      {/* 고정 헤더 — 핸들과 동일하게 touchAction:none으로 브라우저 기본 제스처(뷰포트 축소/
+          당겨서 새로고침 등)를 완전히 막는다. 헤더 안에 가로 스크롤 콘텐츠(카테고리 칩 등)가
+          있으면 그 요소는 네이티브 스크롤 대신 자체 포인터 드래그로 스크롤을 구현해야 한다 —
+          touch-action은 조상 중 하나라도 none이면 자식이 pan-x를 선언해도 무시되기 때문
+          (CSS Touch Action 스펙: 조상 체인의 교집합). */}
       {header && (
         <div
           onPointerDown={onHandleDown}
           onPointerMove={onHandleMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          style={{ padding: '12px 20px 0', cursor: 'grab', flexShrink: 0 }}
+          style={{ padding: '12px 20px 0', cursor: 'grab', flexShrink: 0, touchAction: 'none' }}
         >
           {header}
         </div>
