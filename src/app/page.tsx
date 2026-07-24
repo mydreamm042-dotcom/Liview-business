@@ -115,8 +115,8 @@ export default function Home() {
     setActiveTab(tab)
     setMoreOpen(false)
     if (tab === 'more') setMoreOpen(true)
-    else if (tab === 'hot') setHotSnap(1) // 탐색(TOP10)과 동일하게 기본은 middle
-    // 탐색은 TOP10 랭킹 시트(현재 위치 유지)로 복귀만 한다 — 시트 스냅을 강제하지 않는다.
+    else if (tab === 'hot') setHotSnap(1) // 탭 누르면 항상 middle로
+    else if (tab === 'explore') setSheetSnap(1) // 탭 누르면 항상 middle로 (HOT과 동일)
     // enter는 QR 카메라 오버레이를 activeTab 조건으로 렌더한다.
   }
 
