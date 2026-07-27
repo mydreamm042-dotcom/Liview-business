@@ -9,14 +9,15 @@ import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
 import InteractionModal from '@/components/InteractionModal'
 import KindnessVoteModal from '@/components/KindnessVoteModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
-import QRCodeDisplay from '@/components/QRCodeDisplay'
-import ChatPanel from '@/components/ChatPanel'
-import BrandHeader from '@/components/BrandHeader'
 import SeatMap from '@/components/SeatMap'
-import SeatBoxContent from '@/components/SeatBoxContent'
+import RoomTabBar, { RoomTab } from '@/components/room/RoomTabBar'
+import VenueTab from '@/components/room/VenueTab'
+import StarTab from '@/components/room/StarTab'
+import RoomChatTab from '@/components/room/RoomChatTab'
+import { useQna } from '@/hooks/useQna'
 import { Participant, StaffMember, StaffShift } from '@/lib/supabase/types'
-import { simulateHotTaps, hotIndexAt, HOT_HOLD_MS, HOT_TOTAL_MS } from '@/lib/hotIndex'
-import { WARNING_COOLDOWN_MS } from '@/lib/cooldown'
+import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
+import { WARNING_COOLDOWN_MS, STAR_COOLDOWN_MS } from '@/lib/cooldown'
 import { isOccupantHot } from '@/lib/seatDisplay'
 import InlineMessage from '@/components/InlineMessage'
 
@@ -33,8 +34,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const roomData = getRoomData()
 
   const [showModal, setShowModal] = useState(false)
-  const [showQR, setShowQR] = useState(false)
-  const [showChat, setShowChat] = useState(false)
+  // 하단 4탭 네비 (Phase 9 리디자인) — 매장/별점/채팅/직원.
+  const [tab, setTab] = useState<RoomTab>('venue')
   const [endingRoom, setEndingRoom] = useState(false)
   const [hotFloaters, setHotFloaters] = useState<string[]>([])
   const [hotPressed, setHotPressed] = useState(false)
@@ -68,11 +69,28 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // 반환하므로, 이 방 화면이 1초 tick으로 계속 리렌더되는 것과 겹치면 객체를 그대로
   // deps에 넣은 effect는 매초 정리/재실행된다 (아래 경고 메시지 폴링 effect도 같은 이유).
   const myParticipantId = roomData?.participantId
-  useEffect(() => {
-    if (!state.initialLoaded || !state.venue || state.seats.length === 0 || state.isHost) return
-    const me = state.participants.find(p => p.id === myParticipantId)
-    if (me && !me.seat_id) router.replace(`/room/${code}/seats`)
-  }, [state.initialLoaded, state.venue, state.seats, state.participants, state.isHost, myParticipantId, code, router])
+
+  // 좌석 선택 (Phase 9: 별도 화면을 없애고 이 화면의 자리배치도에서 바로 고른다).
+  const [selectingSeatId, setSelectingSeatId] = useState<string | null>(null)
+  const [seatError, setSeatError] = useState('')
+  const handleSelectSeat = async (seatId: string) => {
+    if (!myParticipantId || selectingSeatId) return
+    setSelectingSeatId(seatId)
+    setSeatError('')
+    try {
+      const res = await fetch('/api/participants/seat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant_id: myParticipantId, session_token: getSessionToken(), seat_id: seatId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+    } catch (e) {
+      setSeatError(e instanceof Error ? e.message : '좌석 선택에 실패했습니다')
+    } finally {
+      setSelectingSeatId(null)
+    }
+  }
 
   // 운영자 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9) — BUSINESS 방에서만
   // 폴링한다. 확인하지 않은 메시지가 여러 개 쌓여도 서버가 가장 오래된 것부터 하나씩만
@@ -276,9 +294,11 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
-  // 채팅창이 닫혀 있어도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
-  // (ChatPanel 안에서만 구독하면 창을 닫는 순간 구독이 끊겨 안읽음 배지를 셀 수 없음).
+  // 채팅 탭이 열려있지 않아도 새 메시지 수를 계속 추적할 수 있도록 여기서 구독을 유지한다
+  // (탭 컴포넌트 안에서만 구독하면 다른 탭으로 옮기는 순간 구독이 끊겨 안읽음을 셀 수 없음).
   const { messages: chatMessages, loading: chatLoading, sendMessage } = useChat(roomData?.roomId ?? '')
+  // 외부 QnA 채널 — 채팅 탭이 열려 있을 때만 폴링한다.
+  const { messages: qnaMessages, sendQna } = useQna(state.venue?.id, tab === 'chat')
   const [unreadCount, setUnreadCount] = useState(0)
   // 배열 길이가 아니라 메시지 id 기준으로 "이미 본 것"을 추적한다. 백그라운드 복귀
   // 재조회처럼 목록이 통째로 교체되는 경우에도 정확히 새 메시지만 세기 위함이고,
@@ -294,16 +314,27 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     const seen = seenChatIdsRef.current
     const newOnes = chatMessages.filter(m => !seen.has(m.id))
     newOnes.forEach(m => seen.add(m.id))
-    if (!showChat) {
+    if (tab !== 'chat') {
       const fromOthers = newOnes.filter(m => m.sender_participant_id !== roomData?.participantId)
       if (fromOthers.length > 0) setUnreadCount(c => c + fromOthers.length)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages, chatLoading])
 
+  // 채팅 탭을 열면 안읽음을 비우고, 베타 참여도 분석용으로 최초 1회만 기록한다.
+  const chatOpenLoggedRef = useRef(false)
   useEffect(() => {
-    if (showChat) setUnreadCount(0)
-  }, [showChat])
+    if (tab !== 'chat') return
+    setUnreadCount(0)
+    if (chatOpenLoggedRef.current || !roomData) return
+    chatOpenLoggedRef.current = true
+    fetch('/api/participants', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participant_id: roomData.participantId, session_token: getSessionToken(), event: 'chat_opened' }),
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   // HOT 탭 히스토리 시뮬레이션은 리액션 목록이 갱신될 때만 수행 (1초 tick마다 재계산 방지)
   const hotSim = useMemo(
@@ -470,22 +501,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   useGeofenceAutoLeave(state.venue?.latitude, state.venue?.longitude, state.venue?.geofence_radius_m, handleAutoLeave)
 
-  const handleOpenChat = () => {
-    setShowChat(true)
-    // 베타 참여도 분석용: 채팅창을 실제로 열어봤는지 최초 1회 기록 (실패해도 화면엔 영향 없음)
-    if (roomData) {
-      fetch('/api/participants', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participant_id: roomData.participantId, session_token: getSessionToken(), event: 'chat_opened' }),
-      }).catch(() => {})
-    }
-  }
-
   const handleHot = () => {
-    setHotPressed(true)
-    if (hotTimerRef.current) clearTimeout(hotTimerRef.current)
-    hotTimerRef.current = setTimeout(() => setHotPressed(false), 150)
     const id = Math.random().toString(36).slice(2)
     setHotFloaters(prev => [...prev, id])
     setTimeout(() => setHotFloaters(prev => prev.filter(x => x !== id)), 900)
@@ -496,25 +512,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
-  const currentMood = state.moodAverage ?? undefined
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  const joinUrl = `${appUrl}/join?code=${code}`
-
   if (!roomData) return null
 
-  const myHearts = state.heartCounts[roomData.participantId] ?? 0
   void tick
   // 전체 탭 히스토리 시뮬레이션(비쌈)은 리액션 목록이 바뀔 때만 다시 하고,
   // 1초 tick마다 필요한 "지금 값"은 그 결과에서 O(1)로 읽는다.
   const hotIndex = hotIndexAt(hotSim)
-
-  const elapsed = hotSim.lastTapTime > -Infinity ? Date.now() - hotSim.lastTapTime : Infinity
-  const isDecaying = elapsed >= HOT_HOLD_MS && elapsed < HOT_TOTAL_MS
-
-  const flameLevel = hotIndex >= 80 ? 4 : hotIndex >= 60 ? 3 : hotIndex >= 40 ? 2 : hotIndex >= 20 ? 1 : 0
-  const flickerKf = flameLevel >= 3 ? 'flame-intense' : 'flame-flicker'
-  const flickerDur = flameLevel >= 4 ? '0.45s' : flameLevel === 3 ? '0.6s' : flameLevel === 2 ? '0.8s' : '1.1s'
-  const hotColor = hotIndex >= 60 ? '#ef4444' : '#f97316'
 
   // 받은 자제 시그널 중 가장 최근 시각 기준으로 남은 휴식 시간을 계산 (새로고침해도 유지됨)
   const myWarningReactions = state.reactions.filter(r => r.receiver_id === roomData.participantId && r.type === 'warning')
@@ -526,304 +529,307 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const warningCountdown = Math.ceil(warningRemainingMs / 1000)
   const warningBottom = 100
 
+
+  // 내 좌석 — 좌석을 아직 안 골랐으면 자리배치도에서 바로 고르게 한다(Phase 9: 별도
+  // 좌석 선택 화면을 없애고 방 화면에 통합). 운영자는 좌석을 고를 필요가 없다.
+  const me = state.participants.find(p => p.id === roomData.participantId)
+  const mySeatId = me?.seat_id ?? null
+  const needsSeat = !state.isHost && state.seats.length > 0 && !mySeatId
+  const occupiedCount = state.participants.filter(p => p.seat_id).length
+
+  const starCooldownMs = (() => {
+    const mine = state.reactions.filter(r => r.sender_participant_id === roomData.participantId && r.type === 'star')
+    if (mine.length === 0) return 0
+    const last = Math.max(...mine.map(r => new Date(r.created_at).getTime()))
+    return Math.max(0, last + STAR_COOLDOWN_MS - Date.now())
+  })()
+
   return (
-    <main className="flex flex-col min-h-dvh" style={{ paddingBottom: 100 }}>
-
-      <div style={{ padding: '52px 20px 16px', background: 'linear-gradient(180deg,rgba(255,107,107,0.06) 0%,transparent 100%)' }}>
-        {/* BUSINESS 방이면 매장 브랜딩을 방 이름 위에 먼저 노출 (PERSONAL 방은 venue=null이라 미표시).
-            운영자(호스트)에게는 매장 설정 진입 버튼을 함께 노출한다. */}
-        {state.venue && (
-          <BrandHeader
-            venue={state.venue}
-            isOperator={state.isHost}
-            onSettings={() => router.push(`/operator/settings/${state.venue!.id}`)}
-          />
-        )}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span className="badge" style={{ background: 'rgba(255,107,107,0.15)', color: 'var(--accent)', border: '1px solid rgba(255,107,107,0.25)' }}>🔴 LIVE</span>
-            </div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2 }}>{roomData.roomName}</h1>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowQR(true)}
-              style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              📱
+    <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', paddingBottom: 96 }}>
+      {/* 상단 바 — 브랜드 표시 + 나가기 */}
+      <header style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '52px 20px 12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 999, background: 'var(--accent)' }} />
+          <span style={{ fontSize: 15, fontWeight: 800 }}>LIview</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {state.isHost && state.venue && (
+            <button onClick={() => router.push(`/operator/settings/${state.venue!.id}`)} aria-label="매장 설정"
+              style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 15, cursor: 'pointer' }}>
+              ⚙
             </button>
-            <button onClick={handleOpenChat}
-              style={{ position: 'relative', width: 40, height: 40, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              💬
-              {unreadCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, padding: '0 4px',
-                  borderRadius: 9, background: '#ff3b30', color: '#fff', fontSize: 10, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-                  boxShadow: '0 0 0 2px var(--bg)',
-                }}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-            {state.isHost ? (
-              <button onClick={handleEndRoom} disabled={endingRoom}
-                style={{ height: 40, padding: '0 16px', borderRadius: 12, background: 'rgba(255,107,107,0.15)', border: '1.5px solid rgba(255,107,107,0.4)', color: 'var(--accent)', fontSize: 13, fontWeight: 800, cursor: endingRoom ? 'default' : 'pointer', opacity: endingRoom ? 0.6 : 1 }}>
-                {endingRoom ? (state.venue ? '마감 중…' : '종료 중…') : (state.venue ? '영업 마감' : '방 종료')}
-              </button>
-            ) : (
-              <button onClick={handleLeave}
-                style={{ height: 40, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                나가기
-              </button>
-            )}
-          </div>
+          )}
+          <button onClick={handleLeave} aria-label="나가기"
+            style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 15, cursor: 'pointer' }}>
+            ⏻
+          </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>참여 코드</span>
-          <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.2em', color: 'var(--accent)', background: 'rgba(255,107,107,0.1)', padding: '3px 10px', borderRadius: 8 }}>{code}</span>
-        </div>
-      </div>
+      </header>
 
-      <div style={{ padding: '0 20px', marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-          <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>👥</div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{state.participants.length}</div>
-            <div style={{ fontSize: 10, color: 'var(--muted2)' }}>참여자</div>
-          </div>
-          <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>💖</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#ff6b6b' }}>{myHearts}</div>
-            <div style={{ fontSize: 10, color: 'var(--muted2)' }}>받은 하트</div>
-          </div>
-          <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>⭐</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#fbbf24' }}>{currentMood !== undefined ? currentMood.toFixed(1) : '-'}</div>
-            <div style={{ fontSize: 10, color: 'var(--muted2)' }}>실시간 만족도</div>
-          </div>
-          <div className="card" style={{
-            padding: '10px 8px 8px', textAlign: 'center',
-            animation: flameLevel >= 1
-              ? `fire-pulse ${flameLevel >= 3 ? '0.7s' : flameLevel === 2 ? '1s' : '1.5s'} ease-in-out infinite`
-              : 'none',
-            borderColor: flameLevel >= 2 ? `rgba(249,115,22,${flameLevel * 0.12})` : undefined,
-          }}>
-            <div style={{ height: 20, marginBottom: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-              {Array.from({ length: Math.max(1, flameLevel) }).map((_, i) => (
-                <span key={i} style={{
-                  fontSize: flameLevel >= 3 ? 14 : 16,
-                  display: 'inline-block',
-                  animation: flameLevel >= 1 ? `${flickerKf} ${flickerDur} ease-in-out infinite` : 'none',
-                  animationDelay: `${i * 0.12}s`,
-                }}>🔥</span>
-              ))}
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: hotColor, lineHeight: 1 }}>
-              {hotIndex}<span style={{ fontSize: 10 }}>%</span>
-            </div>
-            {isDecaying && (
-              <div style={{ fontSize: 9, color: '#f97316', marginTop: 1, fontWeight: 700 }}>식는 중…</div>
-            )}
-            <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', margin: '3px 4px 0', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', width: `${hotIndex}%`,
-                background: hotIndex >= 60 ? 'linear-gradient(90deg,#f97316,#ef4444)' : 'linear-gradient(90deg,#f59e0b,#f97316)',
-                transition: 'width 1s ease',
-              }} />
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--muted2)', marginTop: 2 }}>HOT</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ padding: '0 20px', marginBottom: 16 }}>
-        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-          {hotFloaters.map(id => (
-            <span key={id} className="animate-float-up" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', fontSize: 32, pointerEvents: 'none', zIndex: 10 }}>🔥</span>
-          ))}
-          <button onClick={handleHot} style={{
-            width: '100%', minHeight: 54, borderRadius: 18,
-            background: `linear-gradient(135deg,${hotIndex >= 60 ? '#dc2626,#b91c1c' : '#f97316,#ef4444'})`,
-            border: 'none', color: '#fff',
-            fontSize: hotPressed ? 30 : 26, fontWeight: 800, cursor: 'pointer',
-            transition: 'font-size 0.1s ease, transform 0.1s ease, background 0.5s ease',
-            transform: hotPressed ? 'scale(1.06)' : 'scale(1)',
-            boxShadow: `0 8px 24px rgba(${hotIndex >= 60 ? '220,38,38' : '249,115,22'},0.45)`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            userSelect: 'none', WebkitUserSelect: 'none',
-          }}>🔥 HOT!</button>
-        </div>
-      </div>
-
-      {/* BUSINESS 방 + 좌석 설정이 있는 매장이면, 방 화면에서도 자리배치도가 계속 보인다
-          (Seating 도메인, BUSINESS_RULES.md §2.8) — 입장 시 한 번 고르고 끝나는 게 아니라
-          누가 어느 좌석인지, HOT 여부, 착석 시간을 방 화면에서도 확인할 수 있어야 한다.
-          운영자(호스트)에게는 여기서 바로 손님 케어 액션(경고 메시지/좌석 이동)이 트리거된다
-          (§2.9 "트리거 화면 위치") — 좌석을 2초 길게 누르면 이동 모드, 짧게 누르면 메시지 메뉴. */}
+      {/* 자리배치도 — 항상 상단에 고정 노출 (Seating 도메인 §2.8).
+          손님: 좌석 미선택이면 눌러서 바로 앉는다. 운영자: 길게 눌러 좌석 이동, 짧게 눌러 메시지. */}
       {state.venue && state.seats.length > 0 && (
-        <div style={{ padding: '0 20px', marginBottom: 16 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>자리배치도</p>
+        <div style={{ position: 'relative' }}>
+          {needsSeat && (
+            <p style={{ position: 'absolute', top: 6, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted2)', zIndex: 2 }}>
+              *좌석을 클릭 해보세요
+            </p>
+          )}
           {state.isHost ? (
             <>
               {armedSeatId && (
-                <div className="card-sm" style={{ padding: '10px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="card-sm" style={{ margin: '0 20px 8px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>이동할 좌석을 선택하세요</span>
                   <button onClick={() => setArmedSeatId(null)} style={{ fontSize: 12, color: 'var(--muted2)', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
                 </div>
               )}
-              {careError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 8 }}>{careError}</p>}
-              <div style={{ position: 'relative', width: '100%', height: SEAT_CANVAS_HEIGHT, borderRadius: 16, background: 'var(--card2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+              {careError && <div style={{ padding: '0 20px 8px' }}><InlineMessage type="error">{careError}</InlineMessage></div>}
+              <div style={{ position: 'relative', width: '100%', height: SEAT_CANVAS_HEIGHT, background: 'var(--bg2)', overflow: 'hidden' }}>
                 {state.seats.map(seat => {
                   const occupant = state.participants.find(p => p.seat_id === seat.id)
-                  const isMe = occupant?.id === roomData.participantId
                   const occupantHot = occupant
                     ? isOccupantHot(occupant.id, state.reactions.filter(r => r.type === 'hot'), Date.now())
                     : false
+                  const armed = armedSeatId === seat.id
                   return (
-                    <div
-                      key={seat.id}
-                      className="card"
+                    <div key={seat.id}
                       onPointerDown={() => startSeatPress(seat.id, occupant)}
                       onPointerUp={() => handleSeatRelease(seat.id, occupant)}
                       onPointerLeave={cancelSeatPress}
                       onContextMenu={e => { e.preventDefault(); if (occupant) setMenuTarget(occupant) }}
                       style={{
-                        position: 'absolute',
-                        left: `${seat.position_x}%`,
-                        top: `${seat.position_y}%`,
-                        transform: 'translate(-50%, -50%)',
-                        width: 92,
-                        padding: '10px 12px',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        touchAction: 'none',
-                        border: armedSeatId === seat.id ? '2px solid var(--accent)' : (isMe ? '1.5px solid rgba(255,107,107,0.3)' : '1px solid var(--border)'),
-                        background: isMe ? 'rgba(255,107,107,0.06)' : undefined,
+                        position: 'absolute', left: `${seat.position_x}%`, top: `${seat.position_y}%`,
+                        transform: 'translate(-50%, -50%)', cursor: 'pointer', userSelect: 'none', touchAction: 'none',
                       }}
                     >
-                      <SeatBoxContent seat={seat} occupant={occupant} occupantHot={occupantHot} now={Date.now()} isMe={isMe} />
+                      {occupantHot && (
+                        <span className="fire-pulse" style={{ position: 'absolute', left: '50%', top: -14, transform: 'translateX(-50%)', fontSize: 26, lineHeight: 1, pointerEvents: 'none' }}>🔥</span>
+                      )}
+                      <div style={{
+                        position: 'relative', width: 38, height: 38, borderRadius: 999,
+                        border: `2px solid ${armed ? '#fff' : occupant ? 'var(--muted)' : 'var(--accent)'}`,
+                        background: occupant ? 'var(--card)' : 'transparent',
+                        color: occupant ? 'var(--muted)' : 'var(--accent)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, fontWeight: 800, opacity: occupant ? 0.85 : 1,
+                      }}>
+                        {seat.label}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             </>
           ) : (
-            <SeatMap
-              seats={state.seats}
-              participants={state.participants}
-              hotReactions={state.reactions.filter(r => r.type === 'hot')}
-              now={Date.now()}
-              myParticipantId={roomData.participantId}
-              height={SEAT_CANVAS_HEIGHT}
+            <>
+              {seatError && <div style={{ padding: '0 20px 8px' }}><InlineMessage type="error">{seatError}</InlineMessage></div>}
+              <SeatMap
+                seats={state.seats}
+                participants={state.participants}
+                hotReactions={state.reactions.filter(r => r.type === 'hot')}
+                now={Date.now()}
+                myParticipantId={roomData.participantId}
+                height={SEAT_CANVAS_HEIGHT}
+                onSeatClick={needsSeat ? seat => handleSelectSeat(seat.id) : undefined}
+                seatDisabled={(seat, occupant) => !!occupant || selectingSeatId === seat.id}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 탭 콘텐츠 */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {tab === 'venue' && (
+          <>
+            <VenueTab
+              venue={state.venue}
+              moodAverage={state.moodAverage}
+              occupied={occupiedCount}
+              capacity={state.seats.length}
+              hotIndex={hotIndex}
+              hasSeat={!needsSeat}
+              businessHours={state.businessHours}
+              onHot={handleHot}
+              hotDisabledLabel="좌석 선택 시 서비스 이용이 가능합니다"
             />
-          )}
-        </div>
-      )}
 
-      {/* 직원 교대 (Staff 도메인, §2.4) — 운영자 전용. 명부 자체 구성은 설정 화면(직원
-          명부)에서 하고, 여기서는 그 명부를 대상으로 출근/퇴근만 실시간으로 처리한다. */}
-      {state.isHost && state.venue && staffRoster.length > 0 && (
-        <div style={{ padding: '0 20px', marginBottom: 16 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>직원 교대</p>
-          {staffError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{staffError}</InlineMessage>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {staffRoster.map(s => {
-              const onShift = staffShifts.some(sh => sh.staff_id === s.id && !sh.ended_at)
-              return (
-                <div key={s.id} className="card-sm" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</span>
-                  <button
-                    onClick={() => handleToggleShift(s.id, onShift)}
-                    disabled={staffBusyId === s.id}
-                    className={onShift ? 'btn btn-secondary' : 'btn btn-primary'}
-                    style={{ minHeight: 'auto', width: 'auto', padding: '6px 16px', fontSize: 12, opacity: staffBusyId === s.id ? 0.5 : 1 }}
-                  >
-                    {onShift ? '퇴근' : '출근'}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+            {/* 하트/자제 시그널 (Mutual Match 도메인) — 디자인의 4탭에는 없지만 살아있는
+                기능이라 매장 탭 안에 유지한다. */}
+            {!needsSeat && (
+              <div style={{ padding: '4px 20px 0' }}>
+                <button className="btn btn-secondary" onClick={() => setShowModal(true)} style={{ fontSize: 15 }}>
+                  ✨ 지금 표현하기
+                </button>
+              </div>
+            )}
 
-      {/* 운영 메모 (Operator Analytics 도메인, §2.10) — 운영자 전용. 자유 텍스트로 지금
-          이 순간을 기록해두면, 마감 후 운영 리포트의 추이 그래프에 그 시각 마커로 남는다. */}
-      {state.isHost && state.venue && (
-        <div style={{ padding: '0 20px', marginBottom: 16 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>운영 메모</p>
-          {memoError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{memoError}</InlineMessage>}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <input className="input" value={newMemo} onChange={e => setNewMemo(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddMemo()} placeholder="예: 단체 손님 케이크 서비스" maxLength={200}
-              style={{ flex: 1, padding: '10px 14px', fontSize: 13 }} />
-            <button className="btn btn-secondary" onClick={handleAddMemo} disabled={memoSending || !newMemo.trim()}
-              style={{ minHeight: 'auto', padding: '0 16px' }}>기록</button>
-          </div>
-          {eventMemos.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
-              {eventMemos.slice().reverse().map(m => (
-                <p key={m.id} style={{ fontSize: 12, color: 'var(--text2)' }}>
-                  <span style={{ color: 'var(--muted2)' }}>
-                    {new Date(m.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                  </span> {m.content}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            {/* 직원 교대 (Staff 도메인 §2.4) — 운영자 전용 */}
+            {state.isHost && state.venue && staffRoster.length > 0 && (
+              <div style={{ padding: '20px 20px 0' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>직원 교대</p>
+                {staffError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{staffError}</InlineMessage>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {staffRoster.map(s => {
+                    const onShift = staffShifts.some(sh => sh.staff_id === s.id && !sh.ended_at)
+                    return (
+                      <div key={s.id} className="card-sm" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</span>
+                        <button onClick={() => handleToggleShift(s.id, onShift)} disabled={staffBusyId === s.id}
+                          className={onShift ? 'btn btn-secondary' : 'btn btn-primary'}
+                          style={{ minHeight: 'auto', width: 'auto', padding: '6px 16px', fontSize: 12, opacity: staffBusyId === s.id ? 0.5 : 1 }}>
+                          {onShift ? '퇴근' : '출근'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
-      <div style={{ padding: '0 20px', flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)' }}>참여자 목록</p>
-          <p style={{ fontSize: 12, color: 'var(--muted)' }}>총 {state.totalReactions}개 리액션</p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {state.participants.map((p, idx) => {
-            const isMe = p.id === roomData.participantId
-            const heartCount = state.heartCounts[p.id] ?? 0
-            const warnCount = state.warningCounts[p.id] ?? 0
-            // BUSINESS 방은 운영자가 "방 화면 보기"를 누른 시점(operator-join)에야 참여자로
-            // 등록되므로, 손님이 먼저 입장하면 도착 순서(idx===0) 기준으로는 손님이 HOST로
-            // 잘못 표시되는 버그가 있었다. participants.is_operator는 operator-join API
-            // (Supabase Auth + venues.owner_id로 이미 신원을 검증한 경로)만 true로 설정할
-            // 수 있는 구조적 플래그라 — 도착 순서나 닉네임 문자열과 무관하게 항상 실제
-            // 운영자만 가리킨다. PERSONAL 방은 운영자 개념이 없으므로 기존처럼 첫 참여자
-            // (방 생성자)를 HOST로 본다.
-            const isHost = state.venue ? p.is_operator === true : idx === 0
-            return (
-              <div key={p.id} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderColor: isMe ? 'rgba(255,107,107,0.25)' : undefined, background: isMe ? 'rgba(255,107,107,0.05)' : undefined }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: isMe ? 'rgba(255,107,107,0.2)' : 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: isMe ? 'var(--accent)' : 'var(--text2)', flexShrink: 0 }}>
-                  {p.nickname[0] ?? '?'}
+            {/* 운영 메모 (Operator Analytics 도메인 §2.10) — 운영자 전용 */}
+            {state.isHost && state.venue && (
+              <div style={{ padding: '20px 20px 0' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>운영 메모</p>
+                {memoError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{memoError}</InlineMessage>}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <input className="input" value={newMemo} onChange={e => setNewMemo(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddMemo()} placeholder="예: 단체 손님 케이크 서비스" maxLength={200}
+                    style={{ flex: 1, padding: '10px 14px', fontSize: 13 }} />
+                  <button className="btn btn-secondary" onClick={handleAddMemo} disabled={memoSending || !newMemo.trim()}
+                    style={{ minHeight: 'auto', padding: '0 16px', width: 'auto' }}>기록</button>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: isMe ? 'var(--accent)' : 'var(--text)' }}>{p.nickname}{isMe ? ' (나)' : ''}</p>
-                    {isHost && <span className="badge" style={{ background: 'rgba(124,92,191,0.2)', color: 'var(--purple-light)', fontSize: 10 }}>HOST</span>}
-                  </div>
-                  {isMe && warnCount >= 1 && <p style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>🤫 자제 시그널 {warnCount}개 받음</p>}
-                </div>
-                {heartCount > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(255,107,107,0.12)', padding: '4px 10px', borderRadius: 20 }}>
-                    <span style={{ fontSize: 14 }}>💖</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#ff6b6b' }}>{heartCount}</span>
+                {eventMemos.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
+                    {eventMemos.slice().reverse().map(m => (
+                      <p key={m.id} style={{ fontSize: 12, color: 'var(--text2)' }}>
+                        <span style={{ color: 'var(--muted2)' }}>
+                          {new Date(m.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </span> {m.content}
+                      </p>
+                    ))}
                   </div>
                 )}
               </div>
-            )
-          })}
-        </div>
+            )}
+
+            {/* 참여자 목록 */}
+            <div style={{ padding: '20px 20px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)' }}>참여자 목록</p>
+                <p style={{ fontSize: 12, color: 'var(--muted)' }}>총 {state.totalReactions}개 리액션</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {state.participants.map(p => {
+                  const isMe = p.id === roomData.participantId
+                  const heartCount = state.heartCounts[p.id] ?? 0
+                  const warnCount = state.warningCounts[p.id] ?? 0
+                  const seatLabel = state.seats.find(s => s.id === p.seat_id)?.label
+                  return (
+                    <div key={p.id} className="card" style={{
+                      padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                      borderColor: isMe ? 'rgba(225,6,0,0.35)' : undefined,
+                      background: isMe ? 'rgba(225,6,0,0.06)' : undefined,
+                    }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 999, flexShrink: 0,
+                        border: `1.5px solid ${isMe ? 'var(--accent)' : 'var(--border)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, fontWeight: 800, color: isMe ? 'var(--accent)' : 'var(--text2)',
+                      }}>
+                        {seatLabel ?? (p.nickname[0] ?? '?')}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: isMe ? 'var(--accent)' : 'var(--text)' }}>
+                            {p.nickname}{isMe ? ' (나)' : ''}
+                          </p>
+                          {p.is_operator && <span className="badge" style={{ background: 'rgba(225,6,0,0.18)', color: 'var(--accent)', fontSize: 10 }}>HOST</span>}
+                        </div>
+                        {isMe && warnCount >= 1 && <p style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>🤫 자제 시그널 {warnCount}개 받음</p>}
+                      </div>
+                      {heartCount > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(225,6,0,0.14)', padding: '4px 10px', borderRadius: 20 }}>
+                          <span style={{ fontSize: 14 }}>💖</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{heartCount}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 영업 종료 — 운영자 전용 */}
+            {state.isHost && (
+              <div style={{ padding: '20px 20px 0' }}>
+                <button className="btn btn-secondary" onClick={handleEndRoom} disabled={endingRoom}
+                  style={{ fontSize: 14, opacity: endingRoom ? 0.6 : 1 }}>
+                  {endingRoom ? '마감 중...' : '오늘 영업 종료'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'star' && (
+          <StarTab
+            venue={state.venue}
+            moodAverage={state.moodAverage}
+            cooldownMs={starCooldownMs}
+            onSubmit={async (value: number) => {
+              const res = await handleSend(roomData.participantId, 'star', value)
+              return { error: res?.error }
+            }}
+          />
+        )}
+
+        {tab === 'chat' && (
+          <RoomChatTab
+            messages={chatMessages}
+            qna={qnaMessages}
+            seats={state.seats}
+            participants={state.participants}
+            myParticipantId={roomData.participantId}
+            onSendRoom={async (content: string) => {
+              const res = await sendMessage(content, { participantId: roomData.participantId, nickname: roomData.nickname })
+              return { error: res?.error }
+            }}
+            onSendQna={sendQna}
+          />
+        )}
+
+        {tab === 'staff' && (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <p style={{ fontSize: 34, marginBottom: 12 }}>🙂</p>
+            <p style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>친절 직원 투표</p>
+            <p style={{ fontSize: 13, color: 'var(--muted2)', lineHeight: 1.6 }}>
+              지금은 방을 나갈 때 투표할 수 있어요.<br />이 화면은 곧 준비될 예정이에요.
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* HOT 탭 플로터 */}
+      {hotFloaters.map(id => (
+        <span key={id} className="animate-float-up" style={{
+          position: 'fixed', bottom: 140, left: '50%', transform: 'translateX(-50%)',
+          fontSize: 34, pointerEvents: 'none', zIndex: 45,
+        }}>🔥</span>
+      ))}
+
+      <RoomTabBar active={tab} onSelect={setTab} chatBadge={unreadCount} />
 
       {mutualBanner && (
         <div onClick={() => setMutualBanner(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', padding: '0 32px' }}>
           <div className="card animate-fade-in" onClick={e => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 320, padding: '32px 24px', textAlign: 'center', border: '1.5px solid rgba(255,107,107,0.5)' }}>
+            style={{ width: '100%', maxWidth: 320, padding: '32px 24px', textAlign: 'center', border: '1.5px solid rgba(225,6,0,0.5)' }}>
             <div style={{ fontSize: 52, marginBottom: 12 }}>💗</div>
-            <p style={{ fontSize: 20, fontWeight: 800, color: '#ff6b6b', marginBottom: 8 }}>통했어요!</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>통했어요!</p>
             <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24, lineHeight: 1.6 }}>서로의 마음이<br />연결되었어요 💕</p>
             <button onClick={() => setMutualBanner(false)} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48 }}>확인 ✕</button>
           </div>
@@ -842,35 +848,18 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </div>
       )}
 
-      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}
-          style={{ fontSize: 18, minHeight: 60, boxShadow: '0 12px 32px rgba(255,107,107,0.5)' }}>✨ 지금 표현하기</button>
-      </div>
-
       {showModal && (
         <InteractionModal participants={state.participants} reactions={state.reactions} myParticipantId={roomData.participantId} onSend={handleSend} onClose={() => setShowModal(false)} />
       )}
-      {showQR && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowQR(false)}>
-          <div className="card animate-slide-up" style={{ width: '100%', maxWidth: 448, padding: 24, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} onClick={e => e.stopPropagation()}>
-            <QRCodeDisplay url={joinUrl} code={code} roomName={roomData.roomName} />
-            <button className="btn btn-ghost" onClick={() => setShowQR(false)} style={{ marginTop: 12, fontSize: 15 }}>닫기</button>
-          </div>
-        </div>
-      )}
-      {showChat && (
-        <ChatPanel messages={chatMessages} loading={chatLoading} sendMessage={sendMessage} myParticipantId={roomData.participantId} myNickname={roomData.nickname} onClose={() => setShowChat(false)} />
-      )}
 
-      {/* 운영자 경고 메시지 모달 — 확인 버튼을 눌러야만 닫힌다 (배경 클릭으로 안 닫힘).
-          BUSINESS_RULES.md §2.9 확정 사항: 화면을 가리는 모달로 즉시 인지시켜야 함. */}
+      {/* 운영자 경고 메시지 모달 — 확인 버튼을 눌러야만 닫힌다 (§2.9) */}
       {pendingAlert && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', padding: '0 32px' }}>
           <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 340, padding: '28px 22px', textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📢</div>
             <p style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 8, letterSpacing: '0.05em' }}>매장에서 보낸 메시지</p>
             <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, lineHeight: 1.6 }}>{pendingAlert.message}</p>
-            {alertError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 12 }}>{alertError}</p>}
+            {alertError && <InlineMessage type="error" style={{ marginBottom: 12 }}>{alertError}</InlineMessage>}
             <button onClick={handleAcknowledgeAlert} disabled={acknowledgingAlert} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48, opacity: acknowledgingAlert ? 0.6 : 1 }}>
               {acknowledgingAlert ? '처리 중...' : '확인'}
             </button>
@@ -878,21 +867,14 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </div>
       )}
 
-      {/* 운영자가 손님에게 보내는 경고 메시지 작성 모달 (Guest Care 도메인, §2.9) —
-          자리배치도에서 좌석을 짧게 눌러/우클릭해 연다. state.isHost가 아니면 절대 열리지 않는다. */}
+      {/* 운영자가 손님에게 보내는 경고 메시지 작성 모달 (§2.9) */}
       {menuTarget && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div className="card" style={{ padding: 20, width: '100%', maxWidth: 380 }}>
             <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{menuTarget.nickname}님에게 메시지 보내기</p>
-            <textarea
-              value={careMessage}
-              onChange={e => setCareMessage(e.target.value)}
-              placeholder="예: 목소리를 조금만 낮춰주세요"
-              maxLength={200}
-              rows={3}
-              className="input"
-              style={{ width: '100%', resize: 'none', marginBottom: 12 }}
-            />
+            <textarea value={careMessage} onChange={e => setCareMessage(e.target.value)}
+              placeholder="예: 목소리를 조금만 낮춰주세요" maxLength={200} rows={3} className="input"
+              style={{ width: '100%', resize: 'none', marginBottom: 12 }} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => { setMenuTarget(null); setCareMessage('') }} style={{ flex: 1 }}>취소</button>
               <button className="btn btn-primary" onClick={handleSendCareMessage} disabled={sendingCareMessage || !careMessage.trim()} style={{ flex: 1, opacity: sendingCareMessage || !careMessage.trim() ? 0.5 : 1 }}>

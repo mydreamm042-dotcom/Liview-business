@@ -42,6 +42,8 @@ export interface Venue {
   longitude: number | null
   logo_url: string | null
   hero_image_url: string | null
+  // 방 화면 "소개" 블록에 노출되는 매장 한 줄 소개 (Phase 9)
+  description: string | null
   primary_color: string | null
   secondary_color: string | null
   naver_review_url: string | null
@@ -65,7 +67,7 @@ export interface Venue {
 // §2.3)를 클라이언트가 스스로 판정하기 위한 값 — 이미 매장에 있는 참여자에게는 민감하지 않다.
 export type VenueBranding = Pick<
   Venue,
-  'id' | 'name' | 'category' | 'logo_url' | 'hero_image_url' | 'primary_color' | 'secondary_color'
+  'id' | 'name' | 'category' | 'logo_url' | 'hero_image_url' | 'description' | 'primary_color' | 'secondary_color'
   | 'naver_review_url' | 'google_review_url' | 'kakao_review_url'
   | 'latitude' | 'longitude' | 'geofence_radius_m'
 >
@@ -187,6 +189,19 @@ export interface Message {
   room_id: string
   sender_participant_id: string | null
   sender_nickname: string
+  content: string
+  created_at: string
+}
+
+// 외부 QnA 채널 1건 (Phase 9). 매장에 입장하지 않은 외부인도 쓸 수 있는 별개 채널이라
+// messages(입장 손님 전용)와 테이블이 다르다. author_session은 절대 내려오지 않는다.
+export interface QnaMessage {
+  id: string
+  room_id: string | null
+  author_nickname: string
+  // 입장 손님이 쓴 글이면 그 참여자 id(좌석 번호 아바타를 그리는 근거), 외부인이면 null
+  author_participant_id: string | null
+  is_external: boolean
   content: string
   created_at: string
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { VenueBranding } from '@/lib/supabase/types'
+import { VenueBranding, VenueBusinessHours } from '@/lib/supabase/types'
 
 type VenueWithOwner = VenueBranding & { owner_id: string | null }
+type BusinessHoursToday = VenueBusinessHours
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
@@ -40,12 +41,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   let venue = null
   let seats: unknown[] = []
   let isHost = false
+  let businessHours: BusinessHoursToday | null = null
 
   if (room.venue_id) {
     const { data: venueData } = await supabase
       .from('venues')
       .select(
-        'id, name, category, logo_url, hero_image_url, primary_color, secondary_color, ' +
+        'id, name, category, logo_url, hero_image_url, description, primary_color, secondary_color, ' +
         'naver_review_url, google_review_url, kakao_review_url, latitude, longitude, geofence_radius_m, owner_id'
       )
       .eq('id', room.venue_id)
@@ -69,9 +71,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       .eq('venue_id', room.venue_id)
       .order('sort_order', { ascending: true })
     seats = seatData ?? []
+
+    // 방 화면의 "마감 시간 · 라스트오더" 표시용. 영업일 귀속 기준(§2.1)과 동일하게 방이
+    // 생성된 요일의 영업시간을 쓴다 — 자정을 넘긴 새벽에도 "그 영업일"의 마감 시각이 맞다.
+    const weekday = new Date(room.created_at).getDay()
+    const { data: hours } = await supabase
+      .from('venue_business_hours')
+      .select('weekday, is_closed, is_24h, open_time, close_time, last_order_time')
+      .eq('venue_id', room.venue_id)
+      .eq('weekday', weekday)
+      .maybeSingle<BusinessHoursToday>()
+    businessHours = hours ?? null
   }
 
-  return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats })
+  return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats, businessHours })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {

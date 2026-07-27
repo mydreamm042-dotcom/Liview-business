@@ -49,6 +49,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [address, setAddress] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [heroUrl, setHeroUrl] = useState('')
+  const [description, setDescription] = useState('')
   const [primaryColor, setPrimaryColor] = useState('#667eea')
   const [naverUrl, setNaverUrl] = useState('')
   const [googleUrl, setGoogleUrl] = useState('')
@@ -81,6 +82,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         setAddress(v.address ?? '')
         setLogoUrl(v.logo_url ?? '')
         setHeroUrl(v.hero_image_url ?? '')
+        setDescription(v.description ?? '')
         setPrimaryColor(v.primary_color ?? '#667eea')
         setNaverUrl(v.naver_review_url ?? '')
         setGoogleUrl(v.google_review_url ?? '')
@@ -205,6 +207,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           address: address.trim() || null,
           logo_url: logoUrl.trim() || null,
           hero_image_url: heroUrl.trim() || null,
+          description: description.trim() || null,
           primary_color: primaryColor,
           naver_review_url: naverUrl.trim() || null,
           google_review_url: googleUrl.trim() || null,
@@ -453,6 +456,17 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       <div style={section}>
         <label style={label}>주소 (선택)</label>
         <input className="input" value={address} onChange={e => setAddress(e.target.value)} placeholder="예: 서울 강남구 ..." />
+      </div>
+
+      {/* 매장 소개 — 방 화면(손님)의 "소개" 블록에 그대로 노출된다 (Phase 9) */}
+      <div style={section}>
+        <label style={label}>매장 소개 (선택)</label>
+        <textarea className="input" value={description} onChange={e => setDescription(e.target.value.slice(0, 200))}
+          rows={3} maxLength={200} placeholder="예: 육회가 맛있는 우리 동네 노포"
+          style={{ resize: 'none' }} />
+        <p style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 6 }}>
+          손님 방 화면의 “소개”에 표시돼요 ({description.length}/200)
+        </p>
       </div>
 
       <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 24px' }} />

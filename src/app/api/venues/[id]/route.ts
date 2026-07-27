@@ -9,7 +9,7 @@ import { verifyVenueOwner } from '@/lib/server/venueAuth'
 // /v/[id] 랜딩 화면이 비밀번호가 필요한지 미리 알 수 없어, 참여자가 일단 제출해서
 // 틀렸다는 응답을 받고서야 입력창이 뜨는 혼란스러운 흐름이 된다.
 const PUBLIC_FIELDS =
-  'id, name, category, logo_url, hero_image_url, primary_color, secondary_color, ' +
+  'id, name, category, logo_url, hero_image_url, description, primary_color, secondary_color, ' +
   'naver_review_url, google_review_url, kakao_review_url, join_password_enabled'
 
 // 운영자가 수정할 수 있는 필드 화이트리스트. 이 밖의 키는 무시된다
@@ -18,7 +18,7 @@ const PUBLIC_FIELDS =
 // 향후 매장 실재 검증 시스템이 이 이름을 근거로 판정할 예정이기 때문이다.
 const UPDATABLE_FIELDS = [
   'category', 'address', 'latitude', 'longitude',
-  'logo_url', 'hero_image_url', 'primary_color', 'secondary_color',
+  'logo_url', 'hero_image_url', 'description', 'primary_color', 'secondary_color',
   'naver_review_url', 'google_review_url', 'kakao_review_url',
   'public_chat_enabled',
   'join_password_enabled', 'join_password', 'geofence_radius_m',

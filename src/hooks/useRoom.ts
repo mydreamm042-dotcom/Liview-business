@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Participant, Reaction, VenueBranding, VenueSeat } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueBranding, VenueBusinessHours, VenueSeat } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
 import { HOT_TOTAL_MS } from '@/lib/hotIndex'
@@ -24,6 +24,8 @@ export interface RoomState {
   venue: VenueBranding | null
   // Seating 도메인(§2.8) — BUSINESS 방의 좌석 목록. PERSONAL 방은 항상 빈 배열.
   seats: VenueSeat[]
+  // 이 영업일(방 생성 요일)의 영업시간 — 방 화면의 "마감 시간 · 라스트오더" 표시용.
+  businessHours: VenueBusinessHours | null
   initialLoaded: boolean
 }
 
@@ -45,6 +47,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
     isHost: false,
     venue: null,
     seats: [],
+    businessHours: null,
     initialLoaded: false,
   })
   const supabase = createClient()
@@ -98,6 +101,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       isHost: pData.isHost ?? false,
       venue: pData.venue ?? null,
       seats: pData.seats ?? [],
+      businessHours: pData.businessHours ?? null,
       initialLoaded: true,
     }))
   }, [roomId, roomCode])

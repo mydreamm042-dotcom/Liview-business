@@ -34,10 +34,11 @@ describe('GET /api/rooms/[code] — 매장 브랜딩 동봉 + isHost 판정', ()
   it('매장 브랜딩과 좌석 목록을 함께 반환하고, owner_id는 응답에서 빠진다', async () => {
     const fake = makeFakeSupabase(
       [
-        { data: { id: 'r1', host_session: 'u1', venue_id: 'v1' }, error: null },
+        { data: { id: 'r1', host_session: 'u1', venue_id: 'v1', created_at: '2026-07-23T10:00:00Z' }, error: null },
         { data: [] }, // participants
         { data: { id: 'v1', name: '별빛포차', primary_color: '#111', owner_id: 'u1' } }, // venue
         { data: [{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }] }, // seats
+        { data: { weekday: 4, is_closed: false, is_24h: false, open_time: '18:00', close_time: '02:00', last_order_time: '01:00' } }, // 오늘 영업시간
       ],
       { user: { id: 'u1' } },
     )
@@ -46,15 +47,18 @@ describe('GET /api/rooms/[code] — 매장 브랜딩 동봉 + isHost 판정', ()
     expect(json.venue).toEqual({ id: 'v1', name: '별빛포차', primary_color: '#111' })
     expect(json.seats).toEqual([{ id: 's1', venue_id: 'v1', label: '1번 테이블', sort_order: 0 }])
     expect(json.isHost).toBe(true)
+    // 방 화면의 "마감 시간 · 라스트오더" 표시용으로 그 영업일의 영업시간을 함께 내려준다
+    expect(json.businessHours.last_order_time).toBe('01:00')
   })
 
   it('로그인 안 했으면 isHost는 false다', async () => {
     const fake = makeFakeSupabase(
       [
-        { data: { id: 'r1', host_session: 'u1', venue_id: 'v1' }, error: null },
+        { data: { id: 'r1', host_session: 'u1', venue_id: 'v1', created_at: '2026-07-23T10:00:00Z' }, error: null },
         { data: [] },
         { data: { id: 'v1', name: '별빛포차', owner_id: 'u1' } },
         { data: [] },
+        { data: null }, // 영업시간 미설정 매장
       ],
       { user: null },
     )
