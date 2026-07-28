@@ -40,6 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   // 상태라 방어적으로만 건너뛴다.
   let venue = null
   let seats: unknown[] = []
+  let layoutItems: unknown[] = []
   let isHost = false
   let businessHours: BusinessHoursToday | null = null
 
@@ -65,12 +66,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       venue = safeVenue
     }
 
-    const { data: seatData } = await supabase
-      .from('venue_seats')
-      .select('id, venue_id, label, sort_order, position_x, position_y, created_at')
-      .eq('venue_id', room.venue_id)
-      .order('sort_order', { ascending: true })
-    seats = seatData ?? []
+    // 좌석과 배치 요소(테이블/구역/출입문/텍스트)는 같은 자리배치도를 이루므로 함께 내려준다.
+    const [seatResult, layoutResult] = await Promise.all([
+      supabase
+        .from('venue_seats')
+        .select('id, venue_id, label, sort_order, position_x, position_y, created_at')
+        .eq('venue_id', room.venue_id)
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('venue_layout_items')
+        .select('id, venue_id, kind, label, position_x, position_y, width, height, sort_order, created_at')
+        .eq('venue_id', room.venue_id)
+        .order('sort_order', { ascending: true }),
+    ])
+    seats = seatResult.data ?? []
+    layoutItems = layoutResult.data ?? []
 
     // 방 화면의 "마감 시간 · 라스트오더" 표시용. 영업일 귀속 기준(§2.1)과 동일하게 방이
     // 생성된 요일의 영업시간을 쓴다 — 자정을 넘긴 새벽에도 "그 영업일"의 마감 시각이 맞다.
@@ -84,7 +94,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     businessHours = hours ?? null
   }
 
-  return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats, businessHours })
+  return NextResponse.json({ room: safeRoom, participants, isHost, venue, seats, layoutItems, businessHours })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {

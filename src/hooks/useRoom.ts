@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Participant, Reaction, VenueBranding, VenueBusinessHours, VenueSeat } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueBranding, VenueBusinessHours, VenueLayoutItem, VenueSeat } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
 import { HOT_TOTAL_MS } from '@/lib/hotIndex'
@@ -24,6 +24,8 @@ export interface RoomState {
   venue: VenueBranding | null
   // Seating 도메인(§2.8) — BUSINESS 방의 좌석 목록. PERSONAL 방은 항상 빈 배열.
   seats: VenueSeat[]
+  // 좌석 외 배치 요소(테이블/구역/출입문/텍스트) — 자리배치도 배경으로 함께 그린다.
+  layoutItems: VenueLayoutItem[]
   // 이 영업일(방 생성 요일)의 영업시간 — 방 화면의 "마감 시간 · 라스트오더" 표시용.
   businessHours: VenueBusinessHours | null
   initialLoaded: boolean
@@ -47,6 +49,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
     isHost: false,
     venue: null,
     seats: [],
+    layoutItems: [],
     businessHours: null,
     initialLoaded: false,
   })
@@ -101,6 +104,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       isHost: pData.isHost ?? false,
       venue: pData.venue ?? null,
       seats: pData.seats ?? [],
+      layoutItems: pData.layoutItems ?? [],
       businessHours: pData.businessHours ?? null,
       initialLoaded: true,
     }))
@@ -172,6 +176,7 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
         totalReactions: summary ? summary.total_reactions : prev.totalReactions,
         isHost: typeof pData.isHost === 'boolean' ? pData.isHost : prev.isHost,
         seats: pData.seats ?? prev.seats,
+        layoutItems: pData.layoutItems ?? prev.layoutItems,
       }
     })
   }, [roomId, roomCode])

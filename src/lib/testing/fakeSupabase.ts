@@ -19,6 +19,11 @@ export function makeFakeSupabase(
     return responses[i++]
   }
 
+  // 라우트가 실제로 DB에 보내려던 값(insert/update 페이로드). 응답만으로는 검증할 수 없는
+  // "서버가 값을 어떻게 정규화했는가"(예: 크기 하한 clamp)를 테스트에서 확인하는 데 쓴다.
+  const inserted: Record<string, unknown>[] = []
+  const updated: Record<string, unknown>[] = []
+
   const builder: Record<string, unknown> = {}
   const chain = () => builder
   Object.assign(builder, {
@@ -30,9 +35,9 @@ export function makeFakeSupabase(
     gte: chain,
     order: chain,
     limit: chain,
-    insert: chain,
-    update: chain,
-    upsert: chain,
+    insert: (payload: Record<string, unknown>) => { inserted.push(payload); return builder },
+    update: (payload: Record<string, unknown>) => { updated.push(payload); return builder },
+    upsert: (payload: Record<string, unknown>) => { updated.push(payload); return builder },
     delete: chain,
     single: () => Promise.resolve(next()),
     maybeSingle: () => Promise.resolve(next()),
@@ -48,6 +53,8 @@ export function makeFakeSupabase(
     // DB 쿼리가 아니라 미들웨어가 이미 검증해둔 쿠키를 읽는 것뿐이라 응답 큐와 분리한다.
     auth: { getUser: vi.fn(() => Promise.resolve({ data: { user }, error: null })) },
     _remaining: () => responses.length - i,
+    _inserted: inserted,
+    _updated: updated,
   }
 }
 

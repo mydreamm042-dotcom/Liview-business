@@ -115,6 +115,24 @@ export interface VenueSeat {
   created_at: string
 }
 
+// 자리배치도의 좌석 외 배치 요소 (Seating 도메인 §2.8, Phase 9). 좌석과 달리 참여자가
+// 앉거나 리액션을 남기지 않는 순수 "그림"이라 venue_seats와 테이블을 분리했다.
+// 좌표계는 좌석과 동일한 캔버스 대비 0~100% (position은 중심, width/height는 크기).
+export type LayoutItemKind = 'table' | 'box' | 'door' | 'text'
+
+export interface VenueLayoutItem {
+  id: string
+  venue_id: string
+  kind: LayoutItemKind
+  label: string | null
+  position_x: number
+  position_y: number
+  width: number
+  height: number
+  sort_order: number
+  created_at: string
+}
+
 // 운영자가 특정 손님에게 보내는 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9).
 // reactions.warning(참여자 간 익명 자제 시그널)과는 별개 개념.
 export interface OperatorAlert {

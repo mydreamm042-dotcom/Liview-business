@@ -1,7 +1,8 @@
 'use client'
 
-import { Participant, Reaction, VenueSeat } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueLayoutItem, VenueSeat } from '@/lib/supabase/types'
 import { isOccupantHot } from '@/lib/seatDisplay'
+import LayoutItemShape from './LayoutItemShape'
 
 // 자리배치 캔버스 (Phase 9 리디자인). 좌석을 카드 상자가 아니라 디자인대로 "번호 원형"으로
 // 그린다 — 선택 가능한 빈 좌석은 밝게(빨간 테두리), 이미 누가 앉은 좌석은 어둡게, 지금 HOT을
@@ -9,7 +10,7 @@ import { isOccupantHot } from '@/lib/seatDisplay'
 // position_x/position_y(0~100%)를 그대로 절대 위치로 쓴다 (BUSINESS_RULES.md §2.8).
 export default function SeatMap({
   seats, participants, hotReactions, now, myParticipantId, height = 320,
-  onSeatClick, seatDisabled,
+  layoutItems = [], onSeatClick, seatDisabled,
 }: {
   seats: VenueSeat[]
   participants: Participant[]
@@ -17,6 +18,8 @@ export default function SeatMap({
   now: number
   myParticipantId?: string
   height?: number
+  // 테이블/구역/출입문/텍스트 — 좌석 뒤 배경으로 먼저 그린다.
+  layoutItems?: VenueLayoutItem[]
   onSeatClick?: (seat: VenueSeat, occupant: Participant | undefined) => void
   seatDisabled?: (seat: VenueSeat, occupant: Participant | undefined) => boolean
 }) {
@@ -25,7 +28,10 @@ export default function SeatMap({
       position: 'relative', width: '100%', height,
       background: 'var(--bg2)', overflow: 'hidden',
     }}>
-      {seats.length === 0 && (
+      {/* 배치 요소는 항상 좌석보다 뒤에 (좌석이 테이블 위에 놓인 것처럼 보이게) */}
+      {layoutItems.map(item => <LayoutItemShape key={item.id} item={item} />)}
+
+      {seats.length === 0 && layoutItems.length === 0 && (
         <p style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontSize: 12, color: 'var(--muted2)',

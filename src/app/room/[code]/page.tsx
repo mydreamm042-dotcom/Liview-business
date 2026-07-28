@@ -10,6 +10,7 @@ import InteractionModal from '@/components/InteractionModal'
 import KindnessVoteModal from '@/components/KindnessVoteModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
 import SeatMap from '@/components/SeatMap'
+import LayoutItemShape from '@/components/LayoutItemShape'
 import RoomTabBar, { RoomTab } from '@/components/room/RoomTabBar'
 import VenueTab from '@/components/room/VenueTab'
 import StarTab from '@/components/room/StarTab'
@@ -18,7 +19,7 @@ import { useQna } from '@/hooks/useQna'
 import { Participant, StaffMember, StaffShift } from '@/lib/supabase/types'
 import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS, STAR_COOLDOWN_MS } from '@/lib/cooldown'
-import { isOccupantHot } from '@/lib/seatDisplay'
+import { isOccupantHot, fmtSeatElapsed } from '@/lib/seatDisplay'
 import InlineMessage from '@/components/InlineMessage'
 
 function fmtCd(s: number) {
@@ -588,6 +589,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               )}
               {careError && <div style={{ padding: '0 20px 8px' }}><InlineMessage type="error">{careError}</InlineMessage></div>}
               <div style={{ position: 'relative', width: '100%', height: SEAT_CANVAS_HEIGHT, background: 'var(--bg2)', overflow: 'hidden' }}>
+                {/* 배치 요소(테이블/구역/출입문/텍스트)는 좌석 뒤 배경으로 먼저 그린다 */}
+                {state.layoutItems.map(item => <LayoutItemShape key={item.id} item={item} />)}
                 {state.seats.map(seat => {
                   const occupant = state.participants.find(p => p.seat_id === seat.id)
                   const occupantHot = occupant
@@ -618,6 +621,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                       }}>
                         {seat.label}
                       </div>
+                      {/* 운영자에게는 누가 얼마나 앉아있는지도 함께 보여준다 — 손님 케어
+                          (메시지 보내기/좌석 이동)를 판단하려면 번호만으로는 부족하다. */}
+                      {occupant && (
+                        <div style={{
+                          position: 'absolute', top: 40, left: '50%', transform: 'translateX(-50%)',
+                          textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
+                        }}>
+                          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)' }}>{occupant.nickname}</p>
+                          {occupant.seat_assigned_at && (
+                            <p style={{ fontSize: 9, color: 'var(--muted)' }}>
+                              {fmtSeatElapsed(occupant.seat_assigned_at, Date.now())}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -633,6 +651,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                 now={Date.now()}
                 myParticipantId={roomData.participantId}
                 height={SEAT_CANVAS_HEIGHT}
+                layoutItems={state.layoutItems}
                 onSeatClick={needsSeat ? seat => handleSelectSeat(seat.id) : undefined}
                 seatDisabled={(seat, occupant) => !!occupant || selectingSeatId === seat.id}
               />
