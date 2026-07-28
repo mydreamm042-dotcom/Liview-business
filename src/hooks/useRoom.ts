@@ -164,12 +164,21 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
         r.type !== 'hot' &&
         ((r.type !== 'warning' && r.type !== 'star') || new Date(r.created_at).getTime() >= cutoff)
       )
+      // HOT은 이 폴링 응답으로 통째로 교체하지 않고 병합한다. 이 요청이 "탭 직후 realtime이
+      // 로컬에 반영한 새 탭"보다 먼저 시작된 것이었다면, 응답엔 그 탭이 아직 없어 그대로
+      // 교체하면 방금 오른 HOT 지수가 한 틱 동안 사라졌다가 다음 폴링에 되살아나는 깜빡임이
+      // 생긴다(사용자가 관찰한 "눌렀는데 내려갔다 올라간다" 증상). id 기준으로 합치고,
+      // 감쇠 윈도우(HOT_TOTAL_MS)를 벗어난 것만 정리해 배열이 무한정 자라지 않게 한다.
+      const hotCutoff = Date.now() - HOT_TOTAL_MS
+      const prevHot = prev.reactions.filter(r => r.type === 'hot' && new Date(r.created_at).getTime() >= hotCutoff)
+      const mergedHotById = new Map(prevHot.map(r => [r.id, r]))
+      hotReactions.forEach(r => mergedHotById.set(r.id, r))
       return {
         ...prev,
         participants: pData.participants
           ? (pData.participants as Participant[]).filter(p => !p.left_at)
           : prev.participants,
-        reactions: [...nonHotReactions, ...hotReactions],
+        reactions: [...nonHotReactions, ...mergedHotById.values()],
         warningCounts: summary?.warning_counts ?? prev.warningCounts,
         heartCounts: summary?.heart_counts ?? prev.heartCounts,
         moodAverage: summary ? summary.mood_average : prev.moodAverage,
