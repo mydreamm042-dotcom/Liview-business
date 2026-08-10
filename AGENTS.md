@@ -46,6 +46,7 @@
 - **문서만 고칠 땐 새 브랜치가 필요 없다.** `.md` 파일만 바뀌는 커밋(BUSINESS_RULES.md/ROADMAP_V2.md/PROGRESS.md/decisions/ 등)은 Vercel 빌드에 영향이 없으므로, 지금 작업 중인 브랜치에 바로 커밋·푸시한다
 - **코드가 바뀌는 작업은 매번 새 브랜치.** 작업 단위마다 `main`에서 새 브랜치를 따서(`git checkout -b <name> origin/main`) 그 위에서 작업한다
 - **브랜치 이름 규칙**: `feature/<설명>`(새 기능) · `fix/<설명>`(버그 수정) · `chore/<설명>`(설정/버전/도구 등 기능 아닌 변경) · `docs/<설명>`(문서 전용인데 예외적으로 브랜치가 필요한 경우) — 케밥 케이스, 영문
+- **커밋 메시지 규칙 (2026-08-10 확정)**: `type: 설명` 형식, 설명은 **한국어**로 짧고 명확하게. `type`은 `feat`(기능 추가) · `fix`(버그 수정) · `docs`(문서만 변경) · `chore`(설정/버전/의존성 등) · `refactor`(동작 변화 없는 구조 개선) · `test`(테스트만 추가/수정) 중 하나. 예: `fix: 로그인 버튼 안 눌리는 거 고침`, `feat: 다크모드 추가`. 커밋 하나에 여러 변경을 욱여넣지 않고, 그 커밋이 하는 일 하나를 설명한다
 - **브랜치 → 프리뷰**: 브랜치를 푸시하면 Vercel이 자동으로 프리뷰 배포를 만든다(GitHub 연동 기준). tsc/vitest/build가 로컬에서 먼저 통과해야 푸시한다
 - **CI**: `.github/workflows/ci.yml`이 `main`으로의 PR/push마다 tsc·vitest·build를 자동 실행한다. GitHub 저장소 설정(Settings → Branches → Branch protection rule)에서 이 체크를 `main`의 required status check로 걸어두면 실패 시 머지 버튼 자체가 막힌다 — 이 설정은 Claude가 API로 걸 수 없어 **사용자가 직접 GitHub에서 켜야 한다**
 - **프리뷰 → PR**: 프리뷰가 정상 동작하면 `main`으로 PR을 연다. PR 설명에 프리뷰 링크와 확인한 내용을 남긴다
