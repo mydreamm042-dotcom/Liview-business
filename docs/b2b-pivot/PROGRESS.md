@@ -54,3 +54,11 @@
   격하하되 삭제하지 않음)
 - 🔲 파일럿 매장 찾기 (비개발 트랙, 사용자 담당) — v0.1.0 스코프를 더 좁히려면 선행 필요
 - 🔲 v0.1.0을 위한 지도 게이팅 구현 착수 여부 확인 (아직 코드 미착수)
+- ✅ GitHub Actions CI 추가 (`.github/workflows/ci.yml`) — `main`으로의 PR/push마다 tsc·vitest·
+  build 자동 실행. required status check로 걸어 실패 시 머지를 막으려면 GitHub 저장소 설정에서
+  Branch protection rule을 켜야 하는데, 이건 Claude가 API로 할 수 없어 **사용자가 직접 설정해야
+  함** (`AGENTS.md` "CI" 항목에 안내 남김)
+- ✅ `AGENTS.md`에 브랜치 이름 규칙 명시 — `feature/`(기능) · `fix/`(버그) · `chore/`(설정/도구) ·
+  `docs/`(문서 전용인데 예외적으로 브랜치 필요한 경우)
+- 🔲 GitHub 저장소 설정에서 `main` 브랜치 protection rule 켜고 CI를 required check로 지정 (사용자
+  직접 진행 필요, 안내는 `AGENTS.md` 참고)

@@ -45,7 +45,9 @@
 - **`main` = 프로덕션.** Vercel이 `main`을 프로덕션으로 배포한다. `main`엔 항상 PR을 통해서만 들어간다 — 직접 push 금지
 - **문서만 고칠 땐 새 브랜치가 필요 없다.** `.md` 파일만 바뀌는 커밋(BUSINESS_RULES.md/ROADMAP_V2.md/PROGRESS.md/decisions/ 등)은 Vercel 빌드에 영향이 없으므로, 지금 작업 중인 브랜치에 바로 커밋·푸시한다
 - **코드가 바뀌는 작업은 매번 새 브랜치.** 작업 단위마다 `main`에서 새 브랜치를 따서(`git checkout -b <name> origin/main`) 그 위에서 작업한다
+- **브랜치 이름 규칙**: `feature/<설명>`(새 기능) · `fix/<설명>`(버그 수정) · `chore/<설명>`(설정/버전/도구 등 기능 아닌 변경) · `docs/<설명>`(문서 전용인데 예외적으로 브랜치가 필요한 경우) — 케밥 케이스, 영문
 - **브랜치 → 프리뷰**: 브랜치를 푸시하면 Vercel이 자동으로 프리뷰 배포를 만든다(GitHub 연동 기준). tsc/vitest/build가 로컬에서 먼저 통과해야 푸시한다
+- **CI**: `.github/workflows/ci.yml`이 `main`으로의 PR/push마다 tsc·vitest·build를 자동 실행한다. GitHub 저장소 설정(Settings → Branches → Branch protection rule)에서 이 체크를 `main`의 required status check로 걸어두면 실패 시 머지 버튼 자체가 막힌다 — 이 설정은 Claude가 API로 걸 수 없어 **사용자가 직접 GitHub에서 켜야 한다**
 - **프리뷰 → PR**: 프리뷰가 정상 동작하면 `main`으로 PR을 연다. PR 설명에 프리뷰 링크와 확인한 내용을 남긴다
 - **PR 머지는 항상 사용자가 직접 한다.** Claude는 브랜치를 만들고 PR을 여는 것까지만 하고, `main`으로의 머지는 절대 스스로 하지 않는다 — 사용자가 GitHub에서 검토 후 머지
 - **머지 후**: 브랜치는 지우지 않고 그대로 둔다(사용자 결정, 2026-08-10) — 다음 작업은 갱신된 `main`에서 다시 새 브랜치를 딴다. 단, `claude/mystar-b2b-pivot-cynp6t`를 이름으로 참조하는 것(정합성 크론 등)이 있으면 PR #2 머지 후 `main` 기준으로 갱신해야 한다
