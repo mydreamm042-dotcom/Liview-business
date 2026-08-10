@@ -32,10 +32,13 @@
   별개 축으로, "main에 실제로 릴리스된 단위" 기준
 - ✅ 체크포인트 PR #2 생성 (`claude/mystar-b2b-pivot-cynp6t` → `main`) — 지금까지 61커밋(Phase
   1.5~9 + 오늘 문서 작업) 전체. 머지는 사용자가 직접 검토 후 진행, Claude는 머지하지 않음
-- ✅ PR #2 사용자가 검토 후 머지 완료 (`main` ea3e134) — v0.2.0/v0.3.0 실제 릴리스됨
+- ✅ PR #2 사용자가 검토 후 머지 완료 (`main` ea3e134)
 - ✅ 브랜치 삭제 안 함으로 결정 (사용자) — 정합성 크론 2개가 `claude/mystar-b2b-pivot-cynp6t`를
   이름으로 참조하고 있어서, 지웠으면 다음 크론 실행이 실패했을 것. 브랜치는 유지, 대신 PR #2가
   머지되면 크론 프롬프트를 `main` 기준으로 갱신할 것 (아래 항목)
-- ✅ `package.json` version 0.1.0 → 0.3.0, `MILESTONES.md`의 v0.2.0/v0.3.0 상태를 "릴리스됨"으로
-  갱신 (`chore/v0.3.0-release-bookkeeping` 브랜치 → PR, 새 워크플로우 첫 적용 사례)
 - ✅ 일일/주간 정합성 크론 프롬프트를 `claude/mystar-b2b-pivot-cynp6t` 대신 `main` 기준으로 갱신
+- ⚠️ **되돌림**: `package.json` version을 0.3.0으로, `MILESTONES.md`의 버전 경계·포함 범위를
+  Claude가 사용자 확인 없이 임의로 정해서 채웠던 걸 사용자가 지적 — 사용자 지시 없는 결정이었음
+- ✅ 위 되돌림 반영 — `package.json` version → `0.0.1`(사용자 지정), `MILESTONES.md`는 버전
+  경계/포함 범위를 비우고 "Claude가 임의로 정하지 않는다" 원칙을 명시한 빈 틀만 남김. 실제
+  마일스톤 내용은 앞으로 사용자와 논의해서 채운다
