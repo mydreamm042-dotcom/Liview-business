@@ -1,0 +1,103 @@
+'use client'
+
+import { useEffect, useState, use } from 'react'
+import { useRouter } from 'next/navigation'
+import { getRoomData, getSessionToken } from '@/lib/session'
+import { useRoom } from '@/hooks/useRoom'
+import SeatMap from '@/components/SeatMap'
+import LoadingScreen from '@/components/LoadingScreen'
+import InlineMessage from '@/components/InlineMessage'
+
+// 전용 좌석 선택 화면 (ADR-0001). QR 입장 직후 참여자는 방 화면으로 바로 가지 않고 이 화면을
+// 먼저 거친다 — 좌석을 고르는 순간이 곧 "방 입장 완료"이고, 그 다음에야 방 화면(4탭)이 열린다.
+// 자리배치도를 화면 대부분에 크게 그려서, 손님이 실제 매장 구조를 보고 자기 자리를 찾게 한다.
+export default function SeatSelectPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = use(params)
+  const router = useRouter()
+  const roomData = getRoomData()
+
+  const [selectingSeatId, setSelectingSeatId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!roomData || roomData.roomCode !== code) router.replace(`/room/${code}`)
+  }, [code, roomData, router])
+
+  const { state } = useRoom(roomData?.roomId ?? '', code)
+
+  const myParticipantId = roomData?.participantId
+  const me = state.participants.find(p => p.id === myParticipantId)
+
+  // 이미 좌석이 있거나(재입장 등), 운영자이거나, 매장이 좌석을 아예 등록 안 했으면 이 화면은
+  // 지나칠 단계가 없다 — 방 화면으로 곧장 보낸다. 방 화면 쪽 게이트와 정확히 반대 조건이라
+  // 둘 사이에서 리다이렉트가 무한히 왕복하지 않는다. 첫 로딩이 끝나기 전에는 판단하지
+  // 않는다(좌석 목록이 아직 비어 있는 것과 "좌석이 없는 매장"을 구분해야 한다).
+  const passesGate = state.initialLoaded && (!!me?.seat_id || state.isHost || state.seats.length === 0)
+  useEffect(() => {
+    if (passesGate) router.replace(`/room/${code}`)
+  }, [passesGate, code, router])
+
+  const handleSelectSeat = async (seatId: string) => {
+    if (!myParticipantId || selectingSeatId) return
+    setSelectingSeatId(seatId)
+    setError('')
+    try {
+      const res = await fetch('/api/participants/seat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant_id: myParticipantId, session_token: getSessionToken(), seat_id: seatId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      // 좌석 선택 = 방 입장 완료 (ADR-0001). 폴링이 내 좌석을 반영할 때까지 기다리지 않고
+      // 바로 넘긴다 — 방 화면도 같은 조건으로 게이트하므로 도착 시점엔 이미 통과 상태다.
+      router.replace(`/room/${code}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '좌석 선택에 실패했습니다')
+      setSelectingSeatId(null)
+    }
+  }
+
+  if (!roomData) return <LoadingScreen />
+  if (!state.initialLoaded) return <LoadingScreen />
+  if (passesGate) return <LoadingScreen />
+
+  return (
+    <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ padding: '52px 20px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 20 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 999, background: 'var(--accent)' }} />
+          <span style={{ fontSize: 15, fontWeight: 800 }}>LIview</span>
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
+          {state.venue?.name ?? '매장'}
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--muted2)' }}>
+          앉으신 자리를 선택하면 입장이 완료됩니다
+        </p>
+      </header>
+
+      {error && <div style={{ padding: '8px 20px 0' }}><InlineMessage type="error">{error}</InlineMessage></div>}
+
+      {/* 자리배치도를 남은 세로 공간 전체에 크게 그린다 — 이 화면의 목적 자체가 좌석 선택이라
+          방 화면(상단에 작게 얹는 방식)과 달리 화면을 다 내준다. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <SeatMap
+          seats={state.seats}
+          participants={state.participants}
+          hotReactions={state.reactions.filter(r => r.type === 'hot')}
+          now={Date.now()}
+          myParticipantId={myParticipantId}
+          height="100%"
+          layoutItems={state.layoutItems}
+          onSeatClick={seat => handleSelectSeat(seat.id)}
+          seatDisabled={(seat, occupant) => !!occupant || selectingSeatId === seat.id}
+        />
+      </div>
+
+      <p style={{ padding: '12px 20px 32px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+        어두운 자리는 이미 다른 손님이 앉아 있어요
+      </p>
+    </main>
+  )
+}

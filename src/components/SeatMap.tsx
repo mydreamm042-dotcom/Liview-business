@@ -17,7 +17,9 @@ export default function SeatMap({
   hotReactions: Reaction[]
   now: number
   myParticipantId?: string
-  height?: number
+  // 숫자(px)뿐 아니라 '100%' 같은 CSS 길이도 받는다 — 전용 좌석 선택 화면은 남은 공간을
+  // 전부 캔버스로 쓴다.
+  height?: number | string
   // 테이블/구역/출입문/텍스트 — 좌석 뒤 배경으로 먼저 그린다.
   layoutItems?: VenueLayoutItem[]
   onSeatClick?: (seat: VenueSeat, occupant: Participant | undefined) => void

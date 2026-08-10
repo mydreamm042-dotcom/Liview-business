@@ -71,27 +71,18 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // deps에 넣은 effect는 매초 정리/재실행된다 (아래 경고 메시지 폴링 effect도 같은 이유).
   const myParticipantId = roomData?.participantId
 
-  // 좌석 선택 (Phase 9: 별도 화면을 없애고 이 화면의 자리배치도에서 바로 고른다).
-  const [selectingSeatId, setSelectingSeatId] = useState<string | null>(null)
-  const [seatError, setSeatError] = useState('')
-  const handleSelectSeat = async (seatId: string) => {
-    if (!myParticipantId || selectingSeatId) return
-    setSelectingSeatId(seatId)
-    setSeatError('')
-    try {
-      const res = await fetch('/api/participants/seat', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participant_id: myParticipantId, session_token: getSessionToken(), seat_id: seatId }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-    } catch (e) {
-      setSeatError(e instanceof Error ? e.message : '좌석 선택에 실패했습니다')
-    } finally {
-      setSelectingSeatId(null)
-    }
-  }
+  // 좌석 선택 = 방 입장 (ADR-0001). 매장이 좌석을 등록해뒀는데 아직 안 골랐다면 방 화면의
+  // 어떤 기능도 열지 않고 전용 좌석 선택 화면으로 보낸다. 운영자(호스트)는 손님 좌석을 고를
+  // 필요가 없고, 좌석을 아예 등록 안 한 매장은 이 게이트를 걸면 아무도 못 들어오므로 제외한다.
+  // 첫 로딩 전에는 판단하지 않는다 — 좌석 목록이 아직 안 온 것과 "좌석 없는 매장"은 다르다.
+  const needsSeatSelection =
+    state.initialLoaded &&
+    !state.isHost &&
+    state.seats.length > 0 &&
+    !state.participants.find(p => p.id === myParticipantId)?.seat_id
+  useEffect(() => {
+    if (needsSeatSelection) router.replace(`/room/${code}/seat`)
+  }, [needsSeatSelection, code, router])
 
   // 운영자 경고 메시지 (Guest Care 도메인, BUSINESS_RULES.md §2.9) — BUSINESS 방에서만
   // 폴링한다. 확인하지 않은 메시지가 여러 개 쌓여도 서버가 가장 오래된 것부터 하나씩만
@@ -531,11 +522,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const warningBottom = 100
 
 
-  // 내 좌석 — 좌석을 아직 안 골랐으면 자리배치도에서 바로 고르게 한다(Phase 9: 별도
-  // 좌석 선택 화면을 없애고 방 화면에 통합). 운영자는 좌석을 고를 필요가 없다.
+  // 내 좌석 — 좌석 선택은 방 입장의 전제조건이라 전용 화면(`/room/[code]/seat`)에서 이미
+  // 끝났어야 한다(ADR-0001). 여기 도달했다는 건 게이트를 통과했다는 뜻이다.
   const me = state.participants.find(p => p.id === roomData.participantId)
-  const mySeatId = me?.seat_id ?? null
-  const needsSeat = !state.isHost && state.seats.length > 0 && !mySeatId
   const occupiedCount = state.participants.filter(p => p.seat_id).length
 
   const starCooldownMs = (() => {
@@ -571,14 +560,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       </header>
 
       {/* 자리배치도 — 항상 상단에 고정 노출 (Seating 도메인 §2.8).
-          손님: 좌석 미선택이면 눌러서 바로 앉는다. 운영자: 길게 눌러 좌석 이동, 짧게 눌러 메시지. */}
+          손님은 이미 전용 화면에서 좌석을 골랐으므로 여기선 읽기 전용이다(ADR-0001).
+          운영자: 길게 눌러 좌석 이동, 짧게 눌러 메시지. */}
       {state.venue && state.seats.length > 0 && (
         <div style={{ position: 'relative' }}>
-          {needsSeat && (
-            <p style={{ position: 'absolute', top: 6, left: 0, right: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted2)', zIndex: 2 }}>
-              *좌석을 클릭 해보세요
-            </p>
-          )}
           {state.isHost ? (
             <>
               {armedSeatId && (
@@ -642,20 +627,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               </div>
             </>
           ) : (
-            <>
-              {seatError && <div style={{ padding: '0 20px 8px' }}><InlineMessage type="error">{seatError}</InlineMessage></div>}
-              <SeatMap
-                seats={state.seats}
-                participants={state.participants}
-                hotReactions={state.reactions.filter(r => r.type === 'hot')}
-                now={Date.now()}
-                myParticipantId={roomData.participantId}
-                height={SEAT_CANVAS_HEIGHT}
-                layoutItems={state.layoutItems}
-                onSeatClick={needsSeat ? seat => handleSelectSeat(seat.id) : undefined}
-                seatDisabled={(seat, occupant) => !!occupant || selectingSeatId === seat.id}
-              />
-            </>
+            <SeatMap
+              seats={state.seats}
+              participants={state.participants}
+              hotReactions={state.reactions.filter(r => r.type === 'hot')}
+              now={Date.now()}
+              myParticipantId={roomData.participantId}
+              height={SEAT_CANVAS_HEIGHT}
+              layoutItems={state.layoutItems}
+            />
           )}
         </div>
       )}
@@ -670,21 +650,17 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               occupied={occupiedCount}
               capacity={state.seats.length}
               hotIndex={hotIndex}
-              hasSeat={!needsSeat}
               businessHours={state.businessHours}
               onHot={handleHot}
-              hotDisabledLabel="좌석 선택 시 서비스 이용이 가능합니다"
             />
 
             {/* 하트/자제 시그널 (Mutual Match 도메인) — 디자인의 4탭에는 없지만 살아있는
                 기능이라 매장 탭 안에 유지한다. */}
-            {!needsSeat && (
-              <div style={{ padding: '4px 20px 0' }}>
-                <button className="btn btn-secondary" onClick={() => setShowModal(true)} style={{ fontSize: 15 }}>
-                  ✨ 지금 표현하기
-                </button>
-              </div>
-            )}
+            <div style={{ padding: '4px 20px 0' }}>
+              <button className="btn btn-secondary" onClick={() => setShowModal(true)} style={{ fontSize: 15 }}>
+                ✨ 지금 표현하기
+              </button>
+            </div>
 
             {/* 직원 교대 (Staff 도메인 §2.4) — 운영자 전용 */}
             {state.isHost && state.venue && staffRoster.length > 0 && (
