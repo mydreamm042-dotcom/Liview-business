@@ -1,65 +1,209 @@
 'use client'
 
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useKakaoMapSdk, useGeolocation, KakaoMapInstance } from '@/hooks/useKakaoMap'
+import { DiscoverVenue, RegionalRankings } from '@/lib/supabase/types'
+import VenueDetailSheet from '@/components/VenueDetailSheet'
+import DraggableBottomSheet from '@/components/DraggableBottomSheet'
+import RegionRanking from '@/components/RegionRanking'
+import PlaceSearchBar from '@/components/PlaceSearchBar'
+import MapBottomTabBar, { MapTab } from '@/components/MapBottomTabBar'
+import QRScanner from '@/components/QRScanner'
+import HotListSheet from '@/components/HotListSheet'
+
+// 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
+const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
+const TABBAR_H = 66
+// TOP10/HOT 바텀시트 공통 스냅: collapsed(핸들만) / middle / full.
+// 사용자 요구: 중간 지점이 기본값이고 아래로도(collapsed) 위로도(full) 드래그 가능.
+const COLLAPSED_H = 60
+// 카카오맵 레퍼런스처럼, 시트가 full로 올라가도 상단 검색바 아래에서 멈추도록 여백을 둔다.
+const SHEET_TOP_GAP = 104
+const EMPTY_RANKINGS: RegionalRankings = { hot: [], star: [], heart: [] }
 
 export default function Home() {
   const router = useRouter()
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<KakaoMapInstance | null>(null)
+  const { status: sdkStatus } = useKakaoMapSdk()
+  const { position, status: geoStatus, locate } = useGeolocation()
+  const [venues, setVenues] = useState<DiscoverVenue[]>([])
+  const [rankings, setRankings] = useState<RegionalRankings>(EMPTY_RANKINGS)
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
+  const [sheetSnap, setSheetSnap] = useState(1) // 0=collapsed, 1=middle(기본), 2=full — 탐색(TOP10 랭킹)
+  const [hotSnap, setHotSnap] = useState(1) // HOT 목록도 탐색과 동일하게 기본은 middle
+  const [activeTab, setActiveTab] = useState<MapTab>('explore')
+  const [moreOpen, setMoreOpen] = useState(false)
+  // 시트 최대 높이는 뷰포트 높이에 맞춘다. SSR/hydration 불일치를 피하려고 마운트 후 상태로 잡는다.
+  const [viewportH, setViewportH] = useState(720)
+  // 탭바 실제 높이(safe-area 포함) — 바텀시트를 이 위에 틈 없이 붙인다.
+  const [tabBarH, setTabBarH] = useState(TABBAR_H)
+
+  useEffect(() => {
+    const update = () => setViewportH(window.innerHeight)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
+  const center = position ?? (geoStatus !== 'loading' ? FALLBACK_CENTER : null)
+
+  // 실시간 HOT 매장 목록 + 지역 랭킹을 함께 폴링한다 (같은 위치 기준, 같은 3초 주기라 한 번에).
+  useEffect(() => {
+    if (!center) return
+    const fetchData = () => {
+      const q = `lat=${center.lat}&lng=${center.lng}&radius_km=10`
+      fetch(`/api/discover/venues?${q}`)
+        .then(res => res.json())
+        .then(data => setVenues(data.venues ?? []))
+        .catch(() => setVenues([]))
+      fetch(`/api/discover/rankings?${q}`)
+        .then(res => res.json())
+        .then(data => setRankings({ hot: data.hot ?? [], star: data.star ?? [], heart: data.heart ?? [] }))
+        .catch(() => setRankings(EMPTY_RANKINGS))
+    }
+    fetchData()
+    const interval = setInterval(fetchData, 3000)
+    return () => clearInterval(interval)
+  }, [center])
+
+  const selectedVenue = venues.find(v => v.id === selectedVenueId) ?? null
+  const selectedDistanceKm = selectedVenue?.distance_km ?? null
+
+  // 지도 생성 — SDK 준비되는 즉시 폴백 좌표로 만든다 (위치 권한이 늦어도 지도는 뜨게).
+  useEffect(() => {
+    if (sdkStatus !== 'ready' || !mapContainerRef.current || mapRef.current) return
+    const kakao = window.kakao
+    const map = new kakao.maps.Map(mapContainerRef.current, {
+      center: new kakao.maps.LatLng(FALLBACK_CENTER.lat, FALLBACK_CENTER.lng),
+      level: 5,
+    })
+    mapRef.current = map
+    kakao.maps.event.trigger(map, 'resize')
+  }, [sdkStatus])
+
+  // 실제 위치가 확정되면 지도를 그쪽으로 재중심
+  useEffect(() => {
+    if (!mapRef.current || !center) return
+    mapRef.current.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng))
+  }, [center])
+
+  // 매장 마커 — 목록 갱신마다 다시 그린다 (이전 마커는 반드시 제거).
+  useEffect(() => {
+    if (!mapRef.current) return
+    const kakao = window.kakao
+    const map = mapRef.current
+    const markers = venues.map(v => {
+      const marker = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(v.latitude, v.longitude),
+        map,
+      })
+      kakao.maps.event.addListener(marker, 'click', () => setSelectedVenueId(v.id))
+      return marker
+    })
+    return () => { markers.forEach(m => m.setMap(null)) }
+  }, [venues])
+
+  const handleSearchPick = useCallback((place: { name: string; lat: number; lng: number }) => {
+    if (mapRef.current) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(place.lat, place.lng))
+    }
+  }, [])
+
+  const handleTab = (tab: MapTab) => {
+    setActiveTab(tab)
+    setMoreOpen(false)
+    if (tab === 'more') setMoreOpen(true)
+    else if (tab === 'hot') setHotSnap(1) // 탭 누르면 항상 middle로
+    else if (tab === 'explore') setSheetSnap(1) // 탭 누르면 항상 middle로 (HOT과 동일)
+    // enter는 QR 카메라 오버레이를 activeTab 조건으로 렌더한다.
+  }
 
   return (
-    <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: '80px', paddingBottom: '40px' }}>
-      {/* 헤더 */}
-      <div className="animate-fade-in" style={{ marginBottom: '60px', textAlign: 'center' }}>
-        <div style={{
-          width: 72, height: 72,
-          borderRadius: 22,
-          background: 'linear-gradient(135deg, #ff6b6b, #ee4444)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 36,
-          marginBottom: 24,
-          boxShadow: '0 12px 32px rgba(255,107,107,0.4)',
-          margin: '0 auto 24px',
-        }}>👁️</div>
-        <h1 style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.15, marginBottom: 10, letterSpacing: '-0.5px' }}>
-          noonchi - demo
-        </h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 15, lineHeight: 1.6 }}>
-          모임에서 익명으로<br />마음을 표현해요 ✨
-        </p>
+    <main style={{ height: '100dvh', position: 'relative', overflow: 'hidden' }}>
+      {/* 지도 */}
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--card2)' }}>
+        {sdkStatus === 'error' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: 'var(--muted2)' }}>지도를 불러올 수 없습니다</p>
+            <p style={{ fontSize: 12, color: 'var(--muted)' }}>잠시 후 다시 시도해주세요</p>
+          </div>
+        )}
+        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
       </div>
 
-      {/* 기능 소개 */}
-      <div className="animate-fade-in" style={{ marginBottom: 40, animationDelay: '0.1s', opacity: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {[
-            { emoji: '💖', label: '익명 하트', desc: '호감을 몰래 전달' },
-            { emoji: '⭐', label: '분위기 별점', desc: '지금 이 자리 몇 점?' },
-            { emoji: '🤫', label: '자제 시그널', desc: '살짝 과할 때 신호' },
-            { emoji: '📊', label: '결과 리포트', desc: '오늘의 하이라이트' },
-          ].map(f => (
-            <div key={f.label} className="card-sm" style={{ padding: '16px 14px' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{f.emoji}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{f.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted2)' }}>{f.desc}</div>
-            </div>
-          ))}
+      {/* 장소 검색바 */}
+      <PlaceSearchBar sdkReady={sdkStatus === 'ready'} center={center} onPick={handleSearchPick} />
+
+      {geoStatus === 'denied' && (
+        <div style={{ position: 'absolute', top: 78, left: 16, right: 16, zIndex: 24, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 14px' }}>
+          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>위치 권한이 없어 서울 중심으로 표시됩니다</p>
         </div>
-      </div>
+      )}
 
-      {/* 버튼 */}
-      <div className="animate-slide-up" style={{ animationDelay: '0.2s', opacity: 0 }}>
-        <button className="btn btn-primary" style={{ marginBottom: 12, fontSize: 17 }}
-          onClick={() => router.push('/create')}>
-          🍻 방 만들기
-        </button>
-        <button className="btn btn-secondary" style={{ fontSize: 17 }}
-          onClick={() => router.push('/join')}>
-          🔗 방 참여하기
-        </button>
-      </div>
+      {/* 매장 상세 — 마커/랭킹/검색에서 선택 시 (지도 위 전체 덮는 시트) */}
+      {selectedVenueId && (
+        <VenueDetailSheet venueId={selectedVenueId} distanceKm={selectedDistanceKm} onClose={() => setSelectedVenueId(null)} />
+      )}
 
-      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: 24 }}>
-        앱 설치 없이 링크/QR로 참여 가능
-      </p>
+      {/* TOP10 랭킹 바텀시트 (상세/HOT 오버레이가 닫혀있을 때만).
+          collapsed / middle(기본) / full 3단. 우상단에 현위치 버튼이 붙어 함께 움직인다. */}
+      {!selectedVenueId && activeTab !== 'hot' && (
+        <DraggableBottomSheet
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - SHEET_TOP_GAP]}
+          snapIndex={sheetSnap}
+          onSnapChange={setSheetSnap}
+          bottomOffset={tabBarH}
+          floating={
+            <button onClick={locate} disabled={geoStatus === 'loading'} aria-label="현재 위치로 이동"
+              style={{
+                width: 46, height: 46, borderRadius: 999, background: '#000', border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+              }}>
+              {geoStatus === 'loading'
+                ? <span style={{ fontSize: 18 }}>⏳</span>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" /></svg>}
+            </button>
+          }
+        >
+          <RegionRanking rankings={rankings} regionLabel="내 주변" onSelectVenue={id => setSelectedVenueId(id)} />
+        </DraggableBottomSheet>
+      )}
+
+      {/* HOT 탭 — 실시간 핫한 가게 전체 목록(카테고리 필터 + 정렬). 탐색(TOP10)과 별개 화면이며,
+          탐색으로 자동 전환되지 않는다 — collapsed로 내려도 계속 HOT 탭에 머문다. */}
+      {activeTab === 'hot' && !selectedVenueId && (
+        <HotListSheet
+          venues={venues}
+          onSelectVenue={id => setSelectedVenueId(id)}
+          snapPoints={[COLLAPSED_H, Math.round(viewportH * 0.44), viewportH - SHEET_TOP_GAP]}
+          snapIndex={hotSnap}
+          onSnapChange={setHotSnap}
+          bottomOffset={tabBarH}
+        />
+      )}
+
+      {/* 하단 탭바 */}
+      <MapBottomTabBar active={activeTab} onSelect={handleTab} onHeightChange={setTabBarH} />
+
+      {/* 더보기 메뉴 — 전체 목록 보기는 HOT 탭(바텀시트)으로 이동, 여기엔 사장님 진입만 둔다 */}
+      {moreOpen && (
+        <div onClick={() => setMoreOpen(false)}
+          style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '100%', background: 'var(--bg)', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--muted)', margin: '0 auto 12px' }} />
+            <button className="btn btn-ghost" onClick={() => router.push('/create')} style={{ fontSize: 14 }}>🏪 사장님이신가요? 매장 관리</button>
+          </div>
+        </div>
+      )}
+
+      {/* 입장 — QR 스캔 카메라 */}
+      {activeTab === 'enter' && !selectedVenueId && (
+        <QRScanner onClose={() => setActiveTab('explore')} />
+      )}
     </main>
   )
 }

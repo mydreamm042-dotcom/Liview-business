@@ -11,6 +11,13 @@ export function getSessionToken(): string {
   return token
 }
 
+// 개발/테스트 전용(dev-join) — 이 브라우저가 앞으로 이 세션 토큰의 참여자로 행동하게
+// 강제로 바꾼다. 일반 참여자 흐름에서는 절대 쓰지 않는다(세션 토큰은 자연 발생만 함).
+export function setSessionToken(token: string) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(SESSION_KEY, token)
+}
+
 export interface StoredRoomData {
   roomId: string
   roomCode: string

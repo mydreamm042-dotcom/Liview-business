@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Participant, Reaction, VenueBranding } from '@/lib/supabase/types'
+import { Participant, Reaction, VenueBranding, VenueBusinessHours, VenueLayoutItem, VenueSeat } from '@/lib/supabase/types'
 import { getRoomData, getSessionToken } from '@/lib/session'
 import { STAR_COOLDOWN_MS } from '@/lib/cooldown'
+import { HOT_TOTAL_MS } from '@/lib/hotIndex'
 
 // 경고/별점 원본 리액션은 쿨타임 카운트다운 UI(최대 30분)에만 쓰이므로, 그보다 오래된
 // 것은 클라이언트 메모리에서 버린다. 안 버리면 파티가 길어질수록 배열이 무한정 자란다.
@@ -21,6 +22,12 @@ export interface RoomState {
   isHost: boolean
   // BUSINESS 방이면 매장 브랜딩, PERSONAL 방이면 null. 서버가 GET /api/rooms/[code]에서 내려준다.
   venue: VenueBranding | null
+  // Seating 도메인(§2.8) — BUSINESS 방의 좌석 목록. PERSONAL 방은 항상 빈 배열.
+  seats: VenueSeat[]
+  // 좌석 외 배치 요소(테이블/구역/출입문/텍스트) — 자리배치도 배경으로 함께 그린다.
+  layoutItems: VenueLayoutItem[]
+  // 이 영업일(방 생성 요일)의 영업시간 — 방 화면의 "마감 시간 · 라스트오더" 표시용.
+  businessHours: VenueBusinessHours | null
   initialLoaded: boolean
 }
 
@@ -41,6 +48,9 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
     totalReactions: 0,
     isHost: false,
     venue: null,
+    seats: [],
+    layoutItems: [],
+    businessHours: null,
     initialLoaded: false,
   })
   const supabase = createClient()
@@ -93,19 +103,29 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
       totalReactions: reactions.filter(r => r.type !== 'hot').length,
       isHost: pData.isHost ?? false,
       venue: pData.venue ?? null,
+      seats: pData.seats ?? [],
+      layoutItems: pData.layoutItems ?? [],
+      businessHours: pData.businessHours ?? null,
       initialLoaded: true,
     }))
   }, [roomId, roomCode])
 
   // 3초마다 도는 가벼운 재조회: 전체 reactions를 다시 받는 대신, DB가 미리 집계한
-  // 요약치(하트/경고 수, 평균 별점)와 HOT 원본만 새로 받아온다. 파티가 길어져 reactions가
-  // 아무리 쌓여도 이 폴링 비용은 커지지 않는다. (경고/별점 등 나머지 리액션의 세부 내역은
-  // realtime 구독으로 실시간 갱신되며, 이 재조회는 realtime이 놓친 참여자/HOT/집계치만 복구한다)
+  // 요약치(하트/경고 수, 평균 별점)와 HOT 원본만 새로 받아온다. (경고/별점 등 나머지
+  // 리액션의 세부 내역은 realtime 구독으로 실시간 갱신되며, 이 재조회는 realtime이 놓친
+  // 참여자/HOT/집계치만 복구한다)
+  //
+  // HOT은 반드시 최근 HOT_TOTAL_MS(15분)分만 잘라서 받는다 — simulateHotTaps는 그보다
+  // 오래된 탭을 어차피 0으로 감쇠시켜 계산에 영향을 주지 않으므로, since 없이 전체
+  // 히스토리를 매번 받으면 파티가 길어질수록(HOT은 연타 특성상 리액션 중 가장 많이
+  // 쌓이는 타입) 응답 크기와 그 뒤 hotSim 재계산 비용이 계속 커져 탭할 때마다 버벅이게
+  // 된다 — 이 since 하나로 폴링 비용이 파티 길이와 무관하게 항상 일정해진다.
   const fetchSummary = useCallback(async () => {
+    const hotSince = new Date(Date.now() - HOT_TOTAL_MS).toISOString()
     const [pRes, sRes, hRes] = await Promise.all([
       fetch(`/api/rooms/${roomCode}?session_token=${encodeURIComponent(getSessionToken())}`),
       fetch(`/api/reactions/summary?room_id=${roomId}`),
-      fetch(`/api/reactions?room_id=${roomId}&type=hot`),
+      fetch(`/api/reactions?room_id=${roomId}&type=hot&since=${encodeURIComponent(hotSince)}`),
     ])
 
     const pData = await pRes.json()
@@ -144,17 +164,28 @@ export function useRoom(roomId: string, roomCode: string, onRoomEnded?: () => vo
         r.type !== 'hot' &&
         ((r.type !== 'warning' && r.type !== 'star') || new Date(r.created_at).getTime() >= cutoff)
       )
+      // HOT은 이 폴링 응답으로 통째로 교체하지 않고 병합한다. 이 요청이 "탭 직후 realtime이
+      // 로컬에 반영한 새 탭"보다 먼저 시작된 것이었다면, 응답엔 그 탭이 아직 없어 그대로
+      // 교체하면 방금 오른 HOT 지수가 한 틱 동안 사라졌다가 다음 폴링에 되살아나는 깜빡임이
+      // 생긴다(사용자가 관찰한 "눌렀는데 내려갔다 올라간다" 증상). id 기준으로 합치고,
+      // 감쇠 윈도우(HOT_TOTAL_MS)를 벗어난 것만 정리해 배열이 무한정 자라지 않게 한다.
+      const hotCutoff = Date.now() - HOT_TOTAL_MS
+      const prevHot = prev.reactions.filter(r => r.type === 'hot' && new Date(r.created_at).getTime() >= hotCutoff)
+      const mergedHotById = new Map(prevHot.map(r => [r.id, r]))
+      hotReactions.forEach(r => mergedHotById.set(r.id, r))
       return {
         ...prev,
         participants: pData.participants
           ? (pData.participants as Participant[]).filter(p => !p.left_at)
           : prev.participants,
-        reactions: [...nonHotReactions, ...hotReactions],
+        reactions: [...nonHotReactions, ...mergedHotById.values()],
         warningCounts: summary?.warning_counts ?? prev.warningCounts,
         heartCounts: summary?.heart_counts ?? prev.heartCounts,
         moodAverage: summary ? summary.mood_average : prev.moodAverage,
         totalReactions: summary ? summary.total_reactions : prev.totalReactions,
         isHost: typeof pData.isHost === 'boolean' ? pData.isHost : prev.isHost,
+        seats: pData.seats ?? prev.seats,
+        layoutItems: pData.layoutItems ?? prev.layoutItems,
       }
     })
   }, [roomId, roomCode])

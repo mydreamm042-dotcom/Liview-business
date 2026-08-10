@@ -7,7 +7,10 @@ import { vi } from 'vitest'
 // 주의: 이건 쿼리 내용(어떤 테이블/조건인지)을 검증하지 않고 "호출 순서"만 신뢰한다.
 // 그래서 각 테스트는 라우트 코드가 실제로 호출하는 순서와 정확히 같은 순서로 응답을
 // 큐에 넣어야 한다 (라우트 파일을 같이 읽으면서 맞추는 걸 권장).
-export function makeFakeSupabase(responses: Array<{ data?: unknown; error?: unknown; count?: number }>) {
+export function makeFakeSupabase(
+  responses: Array<{ data?: unknown; error?: unknown; count?: number }>,
+  options: { user?: { id: string } | null } = {},
+) {
   let i = 0
   const next = () => {
     if (i >= responses.length) {
@@ -16,28 +19,42 @@ export function makeFakeSupabase(responses: Array<{ data?: unknown; error?: unkn
     return responses[i++]
   }
 
+  // 라우트가 실제로 DB에 보내려던 값(insert/update 페이로드). 응답만으로는 검증할 수 없는
+  // "서버가 값을 어떻게 정규화했는가"(예: 크기 하한 clamp)를 테스트에서 확인하는 데 쓴다.
+  const inserted: Record<string, unknown>[] = []
+  const updated: Record<string, unknown>[] = []
+
   const builder: Record<string, unknown> = {}
   const chain = () => builder
   Object.assign(builder, {
     select: chain,
     eq: chain,
     neq: chain,
+    in: chain,
     is: chain,
     gte: chain,
     order: chain,
     limit: chain,
-    insert: chain,
-    update: chain,
+    insert: (payload: Record<string, unknown>) => { inserted.push(payload); return builder },
+    update: (payload: Record<string, unknown>) => { updated.push(payload); return builder },
+    upsert: (payload: Record<string, unknown>) => { updated.push(payload); return builder },
     delete: chain,
     single: () => Promise.resolve(next()),
     maybeSingle: () => Promise.resolve(next()),
     then: (resolve: (v: unknown) => unknown) => resolve(next()),
   })
 
+  const user = options.user ?? null
+
   return {
     from: vi.fn(() => builder),
     rpc: vi.fn(() => Promise.resolve(next())),
+    // Operator 도메인(§2.11) 라우트가 쓰는 인증 신원. 큐를 소비하지 않는다 — 세션 확인은
+    // DB 쿼리가 아니라 미들웨어가 이미 검증해둔 쿠키를 읽는 것뿐이라 응답 큐와 분리한다.
+    auth: { getUser: vi.fn(() => Promise.resolve({ data: { user }, error: null })) },
     _remaining: () => responses.length - i,
+    _inserted: inserted,
+    _updated: updated,
   }
 }
 

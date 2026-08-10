@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSessionToken, storeRoomData } from '@/lib/session'
-import { RoomType, VenueCategory } from '@/lib/supabase/types'
+import { createClient } from '@/lib/supabase/client'
+import { VenueCategory } from '@/lib/supabase/types'
+import BackButton from '@/components/BackButton'
+import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import LoadingScreen from '@/components/LoadingScreen'
+import InlineMessage from '@/components/InlineMessage'
 
 const CATEGORIES: { value: VenueCategory; label: string }[] = [
   { value: 'pocha', label: '포차' },
@@ -21,224 +25,152 @@ interface MyVenue {
   category: VenueCategory | null
 }
 
+// 매장 등록 화면. 이 앱은 B2B 전용 플랫폼이라(개인 모임 방 만들기는 별도 저장소의 데모
+// 코드로 이전됨) 이 화면의 유일한 역할은 "매장 등록"이다 — 방은 "만드는" 게 아니라
+// 매장을 한 번 등록해두고, 이후엔 설정 화면의 "오늘 영업 시작"으로 매일 세션을 연다
+// (BUSINESS_RULES.md §2.1~2.2 — 고정 QR 모델).
 export default function CreatePage() {
   const router = useRouter()
-  const [roomType, setRoomType] = useState<RoomType>('PERSONAL')
-  const [roomName, setRoomName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // BUSINESS 전용 상태: 내 매장 목록 (있으면 선택, 없으면 새로 등록)
   const [myVenues, setMyVenues] = useState<MyVenue[] | null>(null)
-  const [selectedVenueId, setSelectedVenueId] = useState<string>('')
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null)
   const [newVenueName, setNewVenueName] = useState('')
   const [newVenueCategory, setNewVenueCategory] = useState<VenueCategory>('pocha')
 
-  // BUSINESS 탭 첫 진입 시 내 매장 목록을 불러온다
+  // 첫 진입 시 로그인 여부를 먼저 확인하고 내 매장 목록을 불러온다 (Operator 도메인
+  // §2.11 — 매장 목록은 로그인 세션 기준이라, 비로그인이면 빈 목록 대신 로그인/회원가입
+  // 유도 화면을 보여준다).
   useEffect(() => {
-    if (roomType !== 'BUSINESS' || myVenues !== null) return
-    const token = getSessionToken()
-    fetch(`/api/venues?operator_token=${encodeURIComponent(token)}`)
-      .then(res => res.json())
-      .then(data => {
-        const venues: MyVenue[] = data.venues ?? []
-        setMyVenues(venues)
-        if (venues.length > 0) setSelectedVenueId(venues[0].id)
-      })
-      .catch(() => setMyVenues([]))
-  }, [roomType, myVenues])
-
-  const handleCreate = async () => {
-    if (!roomName.trim()) { setError('방 이름을 입력해주세요'); return }
-    if (roomType === 'BUSINESS' && !selectedVenueId && !newVenueName.trim()) {
-      setError('매장을 선택하거나 새 매장 이름을 입력해주세요'); return
-    }
-    setLoading(true); setError('')
-
-    try {
-      const host_session = getSessionToken()
-
-      // BUSINESS: 매장이 없으면 먼저 등록하고 그 venue_id로 방을 만든다
-      let venue_id = selectedVenueId
-      if (roomType === 'BUSINESS' && !venue_id) {
-        const venueRes = await fetch('/api/venues', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: newVenueName.trim(),
-            category: newVenueCategory,
-            operator_token: host_session,
-          }),
-        })
-        const venueData = await venueRes.json()
-        if (!venueRes.ok) throw new Error(venueData.error)
-        venue_id = venueData.venue.id
+    createClient().auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        setIsAuthed(false)
+        setMyVenues([])
+        return
       }
+      setIsAuthed(true)
+      fetch('/api/venues')
+        .then(res => res.json())
+        .then(data => setMyVenues(data.venues ?? []))
+        .catch(() => setMyVenues([]))
+    })
+  }, [])
 
-      const res = await fetch('/api/rooms', {
+  const handleRegisterVenue = async () => {
+    if (!newVenueName.trim()) { setError('매장 이름을 입력해주세요'); return }
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/venues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: roomName.trim(),
-          host_session,
-          ...(roomType === 'BUSINESS' ? { room_type: 'BUSINESS', venue_id } : {}),
+          name: newVenueName.trim(),
+          category: newVenueCategory,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-
-      storeRoomData({
-        roomId: data.room.id,
-        roomCode: data.room.code,
-        roomName: data.room.name,
-        participantId: data.participant.id,
-        nickname: '호스트',
-      })
-      router.push(`/room/${data.room.code}`)
+      router.push(`/operator/settings/${data.venue.id}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : '오류가 발생했습니다')
       setLoading(false)
     }
   }
 
-  const isBusiness = roomType === 'BUSINESS'
-  const needNewVenue = isBusiness && myVenues !== null && myVenues.length === 0
-  const createDisabled = loading || !roomName.trim() ||
-    (isBusiness && !selectedVenueId && !newVenueName.trim())
+  if (myVenues === null) {
+    return <LoadingScreen label="매장 정보를 불러오는 중..." />
+  }
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
-      <button onClick={() => router.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 32 }}>
-        ←
-      </button>
+      <BackButton onClick={() => router.back()} marginBottom={32} />
 
-      <div className="animate-fade-in" style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>NEW ROOM</p>
-        <h1 style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>방 만들기</h1>
-        <p style={{ color: 'var(--muted2)', fontSize: 14 }}>
-          {isBusiness ? '매장 손님들을 위한 방을 열어주세요' : '오늘 모임의 이름을 정해주세요'}
-        </p>
-      </div>
-
-      {/* 방 타입 선택: PERSONAL(기존 B2C) / BUSINESS(매장 운영) */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {([
-          { type: 'PERSONAL' as const, label: '개인 모임', desc: '친구 · 회식 · 동창회' },
-          { type: 'BUSINESS' as const, label: '매장 운영', desc: '술집 · 펍 · 카페 사장님' },
-        ]).map(({ type, label, desc }) => (
-          <button key={type} onClick={() => { setRoomType(type); setError('') }}
-            style={{
-              flex: 1, padding: '14px 12px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
-              background: roomType === type ? 'var(--card)' : 'var(--card2)',
-              border: roomType === type ? '2px solid var(--accent)' : '1px solid var(--border)',
-            }}>
-            <p style={{ fontSize: 15, fontWeight: 800, color: roomType === type ? 'var(--accent)' : 'var(--text2)', marginBottom: 2 }}>{label}</p>
-            <p style={{ fontSize: 11, color: 'var(--muted2)' }}>{desc}</p>
-          </button>
-        ))}
-      </div>
+      <PageEyebrowHeader
+        className="animate-fade-in"
+        eyebrow="MY VENUE"
+        title="매장 관리"
+        subtitle="매장은 한 번만 등록하면 고정 QR이 계속 유지돼요"
+        marginBottom={28} titleSize={30} titleLineHeight={1.2} titleMarginBottom={8} subtitleSize={14} subtitleMarginTop={0}
+      />
 
       <div style={{ flex: 1 }}>
-        {/* BUSINESS: 매장 선택 or 신규 등록 */}
-        {isBusiness && (
+        {isAuthed === false ? (
           <div style={{ marginBottom: 24 }}>
-            {myVenues === null ? (
-              <p style={{ fontSize: 13, color: 'var(--muted2)' }}>매장 정보를 불러오는 중...</p>
-            ) : myVenues.length > 0 ? (
-              <>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>내 매장</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {myVenues.map(v => (
-                    <button key={v.id} onClick={() => setSelectedVenueId(v.id)}
-                      style={{
-                        padding: '12px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 700,
-                        background: selectedVenueId === v.id ? 'var(--card)' : 'var(--card2)',
-                        border: selectedVenueId === v.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                        color: selectedVenueId === v.id ? 'var(--accent)' : 'var(--text2)',
-                      }}>
-                      {v.name}
-                      {v.category && <span style={{ fontSize: 11, color: 'var(--muted2)', marginLeft: 8, fontWeight: 400 }}>{CATEGORIES.find(c => c.value === v.category)?.label}</span>}
-                    </button>
-                  ))}
-                  <button onClick={() => { setSelectedVenueId(''); }}
-                    style={{
-                      padding: '12px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', fontSize: 13,
-                      background: selectedVenueId === '' ? 'var(--card)' : 'var(--card2)',
-                      border: selectedVenueId === '' ? '2px solid var(--accent)' : '1px dashed var(--border)',
-                      color: 'var(--muted2)',
-                    }}>
-                    + 새 매장 등록
-                  </button>
-                </div>
-              </>
-            ) : null}
-
-            {(needNewVenue || (myVenues !== null && myVenues.length > 0 && selectedVenueId === '')) && (
-              <div style={{ marginTop: myVenues && myVenues.length > 0 ? 12 : 0 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>매장 이름</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={newVenueName}
-                  onChange={e => setNewVenueName(e.target.value)}
-                  placeholder="예: 별빛포차 강남점"
-                  maxLength={30}
-                />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  {CATEGORIES.map(c => (
-                    <button key={c.value} onClick={() => setNewVenueCategory(c.value)}
-                      style={{
-                        padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                        background: newVenueCategory === c.value ? 'var(--accent)' : 'var(--card2)',
-                        border: '1px solid var(--border)',
-                        color: newVenueCategory === c.value ? '#fff' : 'var(--muted2)',
-                      }}>
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>매장을 등록하거나 관리하려면 사장님 계정으로 로그인해주세요</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={() => router.push('/operator/login')} style={{ flex: 1, fontSize: 15 }}>로그인</button>
+              <button className="btn btn-secondary" onClick={() => router.push('/operator/signup')} style={{ flex: 1, fontSize: 15 }}>회원가입</button>
+            </div>
+          </div>
+        ) : myVenues.length > 0 ? (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>내 매장</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+              {myVenues.map(v => (
+                <button key={v.id} onClick={() => router.push(`/operator/settings/${v.id}`)}
+                  style={{
+                    padding: '14px 16px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 700,
+                    background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                  <span>
+                    {v.name}
+                    {v.category && <span style={{ fontSize: 11, color: 'var(--muted2)', marginLeft: 8, fontWeight: 400 }}>{CATEGORIES.find(c => c.value === v.category)?.label}</span>}
+                  </span>
+                  <span style={{ color: 'var(--muted2)' }}>→</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>매장 이름</label>
+            <input
+              className="input"
+              type="text"
+              value={newVenueName}
+              onChange={e => setNewVenueName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRegisterVenue()}
+              placeholder="예: 별빛포차 강남점"
+              maxLength={30}
+              autoFocus
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {CATEGORIES.map(c => (
+                <button key={c.value} onClick={() => setNewVenueCategory(c.value)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: newVenueCategory === c.value ? 'var(--accent)' : 'var(--card2)',
+                    border: '1px solid var(--border)',
+                    color: newVenueCategory === c.value ? '#fff' : 'var(--muted2)',
+                  }}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {error && <InlineMessage type="error" style={{ marginTop: 8 }}>{error}</InlineMessage>}
           </div>
         )}
 
-        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>
-          {isBusiness ? '오늘의 방 이름' : '모임 이름'}
-        </label>
-        <input
-          className="input"
-          type="text"
-          value={roomName}
-          onChange={e => setRoomName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-          placeholder={isBusiness ? '예: 금요일 밤, 불금 파티' : '예: 팀 회식, 대학 동창 모임'}
-          maxLength={30}
-          autoFocus={!isBusiness}
-        />
-        {error && <p style={{ marginTop: 8, fontSize: 13, color: '#ff6b6b' }}>{error}</p>}
-
-        <div className="card" style={{ padding: 18, marginTop: 24 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>
-            {isBusiness ? 'BUSINESS 방에서 되는 것들' : '방 만들면 생기는 것들'}
-          </p>
+        <div className="card" style={{ padding: 18, marginBottom: 24 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>매장 등록하면 되는 것들</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isBusiness
-              ? ['손님용 QR 입장 + 익명 분위기 피드백', '매장 브랜딩 노출 (이름/로고/컬러)', '마감 후에도 방 기록 영구 보존', '운영자 대시보드 · 리뷰 유도 (준비 중)']
-              : ['6자리 참여 코드 + QR코드 자동 생성', '1시간마다 인터랙션 알림', '익명 하트 · 자제 시그널 · 별점 전송', '종료 시 오늘의 하이라이트 결과']
-            ).map(t => (
+            {['한 번 등록하면 바뀌지 않는 고정 QR', '오늘 영업 시작/종료 버튼으로 매일 세션 관리', '입장 비밀번호 · 위치 반경 제한으로 QR 도용 방지', '마감 후에도 매장 이력 영구 보존'].map(t => (
               <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)' }}>
                 <span style={{ color: 'var(--accent)', fontSize: 16 }}>✓</span>{t}
               </div>
             ))}
           </div>
         </div>
-      </div>
 
-      <button className="btn btn-primary" onClick={handleCreate} disabled={createDisabled}
-        style={{ opacity: createDisabled ? 0.5 : 1, fontSize: 17, marginTop: 24 }}>
-        {loading ? '생성 중...' : isBusiness ? '🏪 매장 방 열기' : '🎉 방 만들기'}
-      </button>
+        {isAuthed && myVenues !== null && myVenues.length === 0 && (
+          <button className="btn btn-primary" onClick={handleRegisterVenue} disabled={loading || !newVenueName.trim()}
+            style={{ opacity: loading || !newVenueName.trim() ? 0.5 : 1, fontSize: 17 }}>
+            {loading ? '등록 중...' : '🏪 매장 등록하기'}
+          </button>
+        )}
+      </div>
     </main>
   )
 }
