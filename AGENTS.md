@@ -32,6 +32,7 @@ bookkeeping` 같은)로 이름 짓는다.
 | `docs/b2b-pivot/PROGRESS.md` | 날짜별 작업 로그 + TODO 겸용 (✅ 완료 / 🔲 진행중 태그) |
 | `docs/b2b-pivot/VARIABLES.md` | 쿨타임/반경/기본크기 등 하드코딩 값의 단일 원천 — 새 상수는 여기 먼저 기록 |
 | `docs/b2b-pivot/MILESTONES.md` | 버전(마일스톤)별 스코프 — "v0.2.0엔 뭐가 들어가는지" 같은 릴리스 단위 기준. Phase(개발 순서)와는 다른 축 |
+| `docs/b2b-pivot/diagrams/service-flow.drawio` | 손님/운영자 전체 서비스 플로우 다이어그램 (draw.io/diagrams.net). 플로우가 바뀌면 같이 갱신 — 점선 박스는 ADR로 확정됐지만 코드 미반영인 목표 설계 |
 | `supabase/migrations/*.sql` | 실제 적용된 스키마의 유일한 원천 (설계 초안 SQL 아님) |
 
 ## 작업 순서 (CHANGE_INTAKE_PROCESS.md 요약)
@@ -63,11 +64,24 @@ bookkeeping` 같은)로 이름 짓는다.
 - **브랜치 이름 규칙 (2026-08-10, 설명 부분 한국어로 확정)**: `type/설명` 형식, `type`은 커밋 메시지와 동일한 `feature`(새 기능) · `fix`(버그 수정) · `chore`(설정/버전/도구 등 기능 아닌 변경) · `docs`(문서 전용인데 예외적으로 브랜치가 필요한 경우) 중 하나. **설명 부분은 한국어**, 띄어쓰기 대신 하이픈(`-`)으로 이어 붙인다. 예: `fix/로그인-버튼-안눌림`, `feature/다크모드-추가`, `chore/버전-정리`. 설명은 의도로 짓는다, 확정 안 된 버전 번호를 박아 넣지 않는다 (예: `chore/v0.3.0-릴리스` ❌ → `chore/릴리스-정리` ✅ — 버전은 리뷰 중 바뀔 수 있어서 이름과 어긋날 위험이 있다)
 - **커밋 메시지 규칙 (2026-08-10 확정)**: `type: 설명` 형식, 설명은 **한국어**로 짧고 명확하게. `type`은 `feat`(기능 추가) · `fix`(버그 수정) · `docs`(문서만 변경) · `chore`(설정/버전/의존성 등) · `refactor`(동작 변화 없는 구조 개선) · `test`(테스트만 추가/수정) 중 하나. 예: `fix: 로그인 버튼 안 눌리는 거 고침`, `feat: 다크모드 추가`. 커밋 하나에 여러 변경을 욱여넣지 않고, 그 커밋이 하는 일 하나를 설명한다
 - **브랜치 → 프리뷰**: 브랜치를 푸시하면 Vercel이 자동으로 프리뷰 배포를 만든다(GitHub 연동 기준). tsc/vitest/build가 로컬에서 먼저 통과해야 푸시한다
-- **CI**: `.github/workflows/ci.yml`이 `main`으로의 PR/push마다 tsc·vitest·build를 자동 실행한다. GitHub 저장소 설정(Settings → Branches → Branch protection rule)에서 이 체크를 `main`의 required status check로 걸어두면 실패 시 머지 버튼 자체가 막힌다 — 이 설정은 Claude가 API로 걸 수 없어 **사용자가 직접 GitHub에서 켜야 한다**
+- **CI**: `.github/workflows/ci.yml`이 `main`으로의 PR/push마다 tsc·vitest·build를 자동 실행한다. GitHub 저장소 설정(Settings → Rulesets → `main-protection`, 2026-08-10 사용자가 직접 생성 완료)에서 이 체크를 required status check로 걸어둬서, 실패하거나 PR을 안 거치면 `main`에 아예 반영이 안 된다
 - **프리뷰 → PR**: 프리뷰가 정상 동작하면 `main`으로 PR을 연다. PR 설명에 프리뷰 링크와 확인한 내용을 남긴다
 - **PR 머지는 항상 사용자가 직접 한다.** Claude는 브랜치를 만들고 PR을 여는 것까지만 하고, `main`으로의 머지는 절대 스스로 하지 않는다 — 사용자가 GitHub에서 검토 후 머지
 - **머지 후**: 브랜치는 지우지 않고 그대로 둔다(사용자 결정, 2026-08-10) — 다음 작업은 갱신된 `main`에서 다시 새 브랜치를 딴다. 단, `claude/mystar-b2b-pivot-cynp6t`를 이름으로 참조하는 것(정합성 크론 등)이 있으면 PR #2 머지 후 `main` 기준으로 갱신해야 한다
 - **버전/마일스톤**: `main`에 의미 있는 단위로 머지될 때마다 `docs/b2b-pivot/MILESTONES.md`와 `package.json`의 `version`을 함께 올린다(시맨틱 버저닝: `MAJOR.MINOR.PATCH`)
+
+## 장애 대응 (2026-08-10, 파일럿 시작 전 확정)
+
+`main` 머지 = 즉시 프로덕션 배포이므로, 배포 직후 뭔가 깨지면 아래 순서로 대응한다:
+
+1. **즉시 롤백**: Vercel 대시보드 → 프로젝트 → **Deployments** 탭 → 문제 생기기 직전의 정상
+   배포 찾기 → **"..." 메뉴 → Promote to Production**(구버전 "Instant Rollback"과 동일 기능).
+   git 되돌리기보다 먼저 이걸로 즉시 트래픽부터 막는다 — 배포는 몇 초, git revert+재배포는
+   몇 분 걸린다
+2. **원인 파악 후 정식 수정**: 롤백으로 급한 불 끄고 나서, `fix/` 브랜치로 원인 고쳐서 평소
+   워크플로우(브랜치 → 프리뷰 → PR → 머지)대로 다시 배포
+3. **기록**: 무슨 일이 있었는지 `docs/b2b-pivot/PROGRESS.md`에 남긴다 (장애 시각, 증상, 롤백
+   여부, 원인, 재발 방지책)
 
 ### 지금 당장의 예외 — 체크포인트 병합
 

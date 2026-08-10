@@ -68,3 +68,14 @@
 - ✅ "사용자는 실무 워크플로우를 배우는 입장" 원칙을 `AGENTS.md`에 명시 — Claude가 더 표준적인
   실무 관행이 있으면 지시받기 전에 먼저 제안. 계기: `chore/v0.3.0-release-bookkeeping` 브랜치
   이름에 확정 안 된 버전 번호를 박아넣었던 실수를 교훈으로 기록
+- ✅ PR #3 머지 완료 (`main` 2cf3a1c) — 버전 0.0.1, MVP 로드맵, CI, 브랜치 보호, 커밋/브랜치
+  규칙 전부 반영. 로컬 `main`도 동기화
+- ✅ 파일럿 검증 기준 초안 — `ROADMAP_V2.md`에 "검증 기준" 섹션 추가. 숫자(%) 기준은 아직
+  안 정하고, 정성적 최소 조건("운영자 유도 없이 손님이 스스로 리액션 1개 이상 사용")만 먼저
+  정의. 숫자 기준은 1차 파일럿 데이터를 보고 정하기로 함(경험 없이 임의로 정하지 않기 위함)
+- ✅ 서비스 플로우 다이어그램을 저장소에 편입 (`docs/b2b-pivot/diagrams/service-flow.drawio`) —
+  ADR-0001(전용 좌석 선택 화면)·ADR-0002(지도 매장 미리보기) 반영해 갱신, 코드 미반영 부분은
+  점선 박스로 표시. `AGENTS.md` 문서 지도에 추가
+- ✅ PR 템플릿 추가 (`.github/PULL_REQUEST_TEMPLATE.md`) — Summary/Test plan/관련 문서 구조
+- ✅ 장애 대응 가이드 추가 (`AGENTS.md`) — Vercel Promote to Production으로 즉시 롤백 → 원인
+  수정은 평소 워크플로우대로 → PROGRESS.md에 기록
