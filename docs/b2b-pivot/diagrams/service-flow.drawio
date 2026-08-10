@@ -1,0 +1,141 @@
+<mxfile host="app.diagrams.net" modified="2026-08-09T00:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram name="MySTAR B2B 서비스 플로우" id="mystar-service-flow">
+    <mxGraphModel dx="2000" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2700" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===== 레인 배경 ===== -->
+        <mxCell id="laneOp" value="운영자 플로우 (Operator)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;verticalAlign=top;align=left;fontSize=16;fontStyle=1;spacingLeft=14;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="2670" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="laneGuest" value="손님 플로우 (Guest)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;verticalAlign=top;align=left;fontSize=16;fontStyle=1;spacingLeft=14;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="0" y="380" width="2670" height="380" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 운영자 노드 ===== -->
+        <mxCell id="op1" value="회원가입 / 로그인&lt;br&gt;(Supabase Auth, operators 생성)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="190" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="op2" value="매장 등록 + 설정&lt;br&gt;브랜딩 · 좌석/배치 에디터 · 직원명부&lt;br&gt;영업시간(7일) · 입장비밀번호 · 공개채팅" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="260" y="90" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="opd1" value="7일 영업시간&lt;br&gt;전부 설정됨?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="510" y="75" width="150" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="opr1" value="영업 시작 불가" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="515" y="255" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="op3" value="오늘 영업 시작 클릭" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="700" y="90" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="opd2" value="오늘&lt;br&gt;정기휴무?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="910" y="75" width="150" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="opr2" value="영업 시작 거부" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="915" y="255" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="op4" value="BUSINESS 방 자동 생성&lt;br&gt;+ 방 화면 진입 (operator-join)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="90" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="op5" value="운영 중 개입&lt;br&gt;손님케어(경고메시지 · 좌석이동) · 직원교대 · 운영메모" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="90" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="opd3" value="마감 방식?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1630" y="75" width="150" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="op6" value="방 마감&lt;br&gt;(closed, 영구보존)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1820" y="90" width="190" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="op7" value="운영 리포트 확인&lt;br&gt;HOT밀도 · 재방문 · 이벤트 타임라인" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="2050" y="90" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 손님 노드 ===== -->
+        <mxCell id="g1" value="홈 지도 (Discovery)&lt;br&gt;실시간 HOT · 지역 TOP10 · 검색" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="450" width="190" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g2" value="매장 상세 바텀시트&lt;br&gt;HOT/별점/채팅/좌석 프리뷰 · 구독배지" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="260" y="450" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g2b" value="지도 매장 화면 미리보기&lt;br&gt;(ADR-0002, 신규 · 코드 반영 대기)&lt;br&gt;방 화면 '매장' 탭 재사용 · 관찰자 뷰, 참여자 미집계" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=center;verticalAlign=middle;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="610" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="gd1" value="반경 이내?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="510" y="435" width="150" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="gr1" value="입장하기 비활성화&lt;br&gt;(거리 안내)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="515" y="615" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="g3" value="실제 매장 방문&lt;br&gt;QR 스캔 (/v/[venueId])" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="700" y="450" width="190" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g4" value="입장 검증&lt;br&gt;위치반경 · 입장비밀번호 · active 방 존재" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="930" y="450" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="gd2" value="검증 통과?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1190" y="435" width="150" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="gr2" value="입장 거부" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1195" y="615" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="g5" value="참여자 생성/복귀&lt;br&gt;(좌석 선택 전 — 아직 방 미입장)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="450" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g6" value="전용 좌석 선택 화면&lt;br&gt;(ADR-0001, 신규 · 코드 반영 대기)&lt;br&gt;선택 완료 = 방 입장 처리" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=center;verticalAlign=middle;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1660" y="450" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g7" value="4탭 이용&lt;br&gt;매장(HOT) · 별점 · 채팅(매장/외부QnA) · 직원&lt;br&gt;+ 하트/자제시그널" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1880" y="450" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g8" value="나가기&lt;br&gt;(직접 또는 반경이탈 자동 soft-leave)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="2170" y="450" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g9" value="나가기 플로우&lt;br&gt;별점 → 직원평가(스킵가능) → 리뷰 자동생성 → 주변 HOT 추천" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="2410" y="450" width="260" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 운영자 엣지 ===== -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op1" target="op2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op2" target="opd1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="예" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="opd1" target="op3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="아니오" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;strokeColor=#b85450;fontColor=#b85450;" edge="1" parent="1" source="opd1" target="opr1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op3" target="opd2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" value="아니오" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="opd2" target="op4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" value="예(휴무)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;strokeColor=#b85450;fontColor=#b85450;" edge="1" parent="1" source="opd2" target="opr2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op4" target="op5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op5" target="opd3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" value="영업종료 버튼" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="opd3" target="op6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" value="마감+1h 자동(새벽5시 크론)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="opd3" target="op6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="op6" target="op7"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ===== 손님 엣지 ===== -->
+        <mxCell id="f1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g1" target="g2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g2" target="gd1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f3" value="예" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="gd1" target="g3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f4" value="아니오" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;strokeColor=#b85450;fontColor=#b85450;" edge="1" parent="1" source="gd1" target="gr1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g3" target="g4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g4" target="gd2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f7" value="예" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="gd2" target="g5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f8" value="아니오" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;strokeColor=#b85450;fontColor=#b85450;" edge="1" parent="1" source="gd2" target="gr2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g5" target="g6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f10" value="방 화면 진입" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g6" target="g7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f11" value="직접 나가기" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="g7" target="g8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f12" value="반경 이탈 시 자동(soft-leave)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="g7" target="g8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;endArrow=block;" edge="1" parent="1" source="g8" target="g9"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="f14" value="매장 탭(미리보기)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;dashed=1;strokeColor=#999999;fontColor=#666666;endArrow=block;" edge="1" parent="1" source="g1" target="g2b"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ===== 참고 메모 ===== -->
+        <mxCell id="note1" value="⚠ 2026-08-10 갱신 — 점선 박스(g6, g2b)는 ADR-0001/0002로 확정된 목표 설계입니다. 문서만 확정, 코드는 아직 이전 버전(좌석선택이 방화면에 통합된 상태)입니다. v0.1.0(MILESTONES.md)은 지도 레인(g1/g2/g2b/gd1/gr1) 없이 QR→방화면만 있는 축소 버전입니다." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="765" width="1200" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 레인 간 연결 (운영자 → 손님 실시간 영향) ===== -->
+        <mxCell id="x1" value="그 매장 active 방이 있어야 입장 가능" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;dashed=1;strokeColor=#999999;fontColor=#666666;endArrow=block;" edge="1" parent="1" source="op4" target="g4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="x2" value="경고 메시지 모달 · 좌석 이동 실시간 반영" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;dashed=1;strokeColor=#999999;fontColor=#666666;endArrow=block;" edge="1" parent="1" source="op5" target="g7"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
