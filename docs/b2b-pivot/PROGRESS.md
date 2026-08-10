@@ -79,3 +79,7 @@
 - ✅ PR 템플릿 추가 (`.github/PULL_REQUEST_TEMPLATE.md`) — Summary/Test plan/관련 문서 구조
 - ✅ 장애 대응 가이드 추가 (`AGENTS.md`) — Vercel Promote to Production으로 즉시 롤백 → 원인
   수정은 평소 워크플로우대로 → PROGRESS.md에 기록
+- ✅ ADR-0005: 3개 가설(A=손님이 앱을 켜서 쓴다 / B=사장님이 AI 운영 리포트를 필요로 한다 /
+  C=외부인이 실시간 분위기 데이터를 원한다) 검증 순서 확정 — A 최우선(B·C의 전제조건) → A
+  검증 후 C(이미 구현됨, 저비용)를 B(신규 구현, 고비용)보다 먼저 → B는 실제 구현 전에
+  인터뷰/가짜 버튼으로 먼저 검증. `ROADMAP_V2.md` "핵심 가설과 MVP 로드맵" 섹션 갱신
