@@ -38,5 +38,4 @@
   머지되면 크론 프롬프트를 `main` 기준으로 갱신할 것 (아래 항목)
 - ✅ `package.json` version 0.1.0 → 0.3.0, `MILESTONES.md`의 v0.2.0/v0.3.0 상태를 "릴리스됨"으로
   갱신 (`chore/v0.3.0-release-bookkeeping` 브랜치 → PR, 새 워크플로우 첫 적용 사례)
-- 🔲 일일/주간 정합성 크론 프롬프트를 `claude/mystar-b2b-pivot-cynp6t` 대신 `main` 기준으로 갱신
-  (`update_trigger`)
+- ✅ 일일/주간 정합성 크론 프롬프트를 `claude/mystar-b2b-pivot-cynp6t` 대신 `main` 기준으로 갱신
