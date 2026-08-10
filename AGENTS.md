@@ -16,6 +16,7 @@
 | `docs/b2b-pivot/decisions/NNNN-*.md` | **결정 기록 (ADR).** 결정 하나당 파일 하나, 번호 순으로 쌓임. "왜 이렇게 짰지?"는 여기서 검색 |
 | `docs/b2b-pivot/PROGRESS.md` | 날짜별 작업 로그 + TODO 겸용 (✅ 완료 / 🔲 진행중 태그) |
 | `docs/b2b-pivot/VARIABLES.md` | 쿨타임/반경/기본크기 등 하드코딩 값의 단일 원천 — 새 상수는 여기 먼저 기록 |
+| `docs/b2b-pivot/MILESTONES.md` | 버전(마일스톤)별 스코프 — "v0.2.0엔 뭐가 들어가는지" 같은 릴리스 단위 기준. Phase(개발 순서)와는 다른 축 |
 | `supabase/migrations/*.sql` | 실제 적용된 스키마의 유일한 원천 (설계 초안 SQL 아님) |
 
 ## 작업 순서 (CHANGE_INTAKE_PROCESS.md 요약)
@@ -39,7 +40,17 @@
 - **주간 (의미적 감사)**: `BUSINESS_RULES.md`/`ROADMAP_V2.md`를 실제 코드와 직접 대조하는 전체 감사 — 오늘(2026-08-10) 수행한 것과 동일한 방식
 - 두 단계 모두 **발견만 하고 `PROGRESS.md`에 기록**한다. `BUSINESS_RULES.md`/`ROADMAP_V2.md` 등 권위 문서는 크론이 절대 자동 수정하지 않는다 — 반영은 항상 사용자와의 대화를 거쳐 수동으로
 
-## 브랜치/커밋
+## 워크플로우 (2026-08-10 확정) — 브랜치 → 프리뷰 → 프로덕션
 
-- 작업 브랜치: `claude/mystar-b2b-pivot-cynp6t`
-- `git push -u origin <branch>`로 푸시. 사용자가 명시적으로 요청하지 않으면 PR을 만들지 않는다
+- **`main` = 프로덕션.** Vercel이 `main`을 프로덕션으로 배포한다. `main`엔 항상 PR을 통해서만 들어간다 — 직접 push 금지
+- **문서만 고칠 땐 새 브랜치가 필요 없다.** `.md` 파일만 바뀌는 커밋(BUSINESS_RULES.md/ROADMAP_V2.md/PROGRESS.md/decisions/ 등)은 Vercel 빌드에 영향이 없으므로, 지금 작업 중인 브랜치에 바로 커밋·푸시한다
+- **코드가 바뀌는 작업은 매번 새 브랜치.** 작업 단위마다 `main`에서 새 브랜치를 따서(`git checkout -b <name> origin/main`) 그 위에서 작업한다
+- **브랜치 → 프리뷰**: 브랜치를 푸시하면 Vercel이 자동으로 프리뷰 배포를 만든다(GitHub 연동 기준). tsc/vitest/build가 로컬에서 먼저 통과해야 푸시한다
+- **프리뷰 → PR**: 프리뷰가 정상 동작하면 `main`으로 PR을 연다. PR 설명에 프리뷰 링크와 확인한 내용을 남긴다
+- **PR 머지는 항상 사용자가 직접 한다.** Claude는 브랜치를 만들고 PR을 여는 것까지만 하고, `main`으로의 머지는 절대 스스로 하지 않는다 — 사용자가 GitHub에서 검토 후 머지
+- **머지 후**: 그 브랜치는 용도가 끝났으니 정리(삭제)하고, 다음 작업은 갱신된 `main`에서 다시 새 브랜치를 딴다
+- **버전/마일스톤**: `main`에 의미 있는 단위로 머지될 때마다 `docs/b2b-pivot/MILESTONES.md`와 `package.json`의 `version`을 함께 올린다(시맨틱 버저닝: `MAJOR.MINOR.PATCH`)
+
+### 지금 당장의 예외 — 체크포인트 병합
+
+지금까지 이 워크플로우 확정 전에 `claude/mystar-b2b-pivot-cynp6t` 브랜치 하나에 Phase 1.5~9(홈지도+방화면 리디자인)와 오늘 문서 작업까지 61커밋이 쌓여있다. 이건 하나의 체크포인트 PR로 `main`에 병합하고, **그 이후부터** 위 워크플로우를 엄격히 적용한다.
