@@ -60,5 +60,11 @@
   함** (`AGENTS.md` "CI" 항목에 안내 남김)
 - ✅ `AGENTS.md`에 브랜치 이름 규칙 명시 — `feature/`(기능) · `fix/`(버그) · `chore/`(설정/도구) ·
   `docs/`(문서 전용인데 예외적으로 브랜치 필요한 경우)
-- 🔲 GitHub 저장소 설정에서 `main` 브랜치 protection rule 켜고 CI를 required check로 지정 (사용자
-  직접 진행 필요, 안내는 `AGENTS.md` 참고)
+- ✅ GitHub 저장소 설정에서 `main` 브랜치 Ruleset(`main-protection`) 생성 완료 (사용자 직접 진행)
+  — PR 필수(직접 push 금지) + CI(`check`) required status check + force push 차단. Target
+  branches를 "Include default branch"로 지정해 `main`에 적용
+- ✅ 커밋 메시지 규칙 확정 — `type: 한국어 설명` (`feat`/`fix`/`docs`/`chore`/`refactor`/`test`)
+- ✅ 브랜치 이름 설명 부분도 한국어로 통일 (`type/한국어-설명`, 예: `fix/로그인-버튼-안눌림`)
+- ✅ "사용자는 실무 워크플로우를 배우는 입장" 원칙을 `AGENTS.md`에 명시 — Claude가 더 표준적인
+  실무 관행이 있으면 지시받기 전에 먼저 제안. 계기: `chore/v0.3.0-release-bookkeeping` 브랜치
+  이름에 확정 안 된 버전 번호를 박아넣었던 실수를 교훈으로 기록
