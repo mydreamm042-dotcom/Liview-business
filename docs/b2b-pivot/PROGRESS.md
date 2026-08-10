@@ -33,4 +33,9 @@
 - ✅ 체크포인트 PR #2 생성 (`claude/mystar-b2b-pivot-cynp6t` → `main`) — 지금까지 61커밋(Phase
   1.5~9 + 오늘 문서 작업) 전체. 머지는 사용자가 직접 검토 후 진행, Claude는 머지하지 않음
 - 🔲 PR #2 사용자 검토·머지 대기 — 머지되면 `package.json` version과 `MILESTONES.md` 상태를
-  v0.2.0/v0.3.0 "릴리스됨"으로 갱신하고 이 브랜치는 정리
+  v0.2.0/v0.3.0 "릴리스됨"으로 갱신
+- ✅ 브랜치 삭제 안 함으로 결정 (사용자) — 정합성 크론 2개가 `claude/mystar-b2b-pivot-cynp6t`를
+  이름으로 참조하고 있어서, 지웠으면 다음 크론 실행이 실패했을 것. 브랜치는 유지, 대신 PR #2가
+  머지되면 크론 프롬프트를 `main` 기준으로 갱신할 것 (아래 항목)
+- 🔲 PR #2 머지 후, 일일/주간 정합성 크론 프롬프트를 `claude/mystar-b2b-pivot-cynp6t` 대신
+  `main` 기준으로 갱신 (`update_trigger`)
