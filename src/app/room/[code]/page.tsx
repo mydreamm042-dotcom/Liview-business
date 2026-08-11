@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
+import { getRoomData, getSessionToken, clearRoomData, isPreviewingAsGuest, clearPreviewAsGuest } from '@/lib/session'
 import { useRoom } from '@/hooks/useRoom'
 import { useChat } from '@/hooks/useChat'
 import { useGeofenceAutoLeave } from '@/hooks/useGeofenceAutoLeave'
@@ -60,6 +60,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     () => router.push(`/room/${code}/result`),
   )
 
+  // 개발자 테스트 전용 — 운영자가 /dev/rooms에서 "테스트 입장"을 누르면 같은 탭에서 바로
+  // 손님 화면을 보여주기 위해, 실제로는 호스트여도(state.isHost=true) 렌더링만 손님으로
+  // 취급한다. 서버 권한 판정은 전혀 안 바뀐다 — 방 이동/경고 메시지 같은 실제 운영자
+  // 액션은 여전히 서버가 별도로 인증한다. 아래부터는 state.isHost 대신 이 값만 쓴다.
+  const previewingAsGuest = isPreviewingAsGuest()
+  const effectiveIsHost = state.isHost && !previewingAsGuest
+
   // BUSINESS 방은 좌석 선택이 필수다(BUSINESS_RULES.md §2.8) — 매장이 좌석을 하나라도
   // 등록해뒀는데 내가 아직 안 골랐다면 좌석 선택 화면으로 보낸다. 좌석이 하나도 없는
   // 매장(운영자가 아직 설정 안 함)은 이 게이트를 걸지 않는다 — 그렇지 않으면 아무도
@@ -77,7 +84,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // 첫 로딩 전에는 판단하지 않는다 — 좌석 목록이 아직 안 온 것과 "좌석 없는 매장"은 다르다.
   const needsSeatSelection =
     state.initialLoaded &&
-    !state.isHost &&
+    !effectiveIsHost &&
     state.seats.length > 0 &&
     !state.participants.find(p => p.id === myParticipantId)?.seat_id
   useEffect(() => {
@@ -210,12 +217,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [staffError, setStaffError] = useState('')
 
   useEffect(() => {
-    if (!state.isHost || !state.venue) return
+    if (!effectiveIsHost || !state.venue) return
     fetch(`/api/venues/${state.venue.id}/staff`)
       .then(res => res.json())
       .then(data => setStaffRoster(data.staff ?? []))
       .catch(() => {})
-  }, [state.isHost, state.venue])
+  }, [effectiveIsHost, state.venue])
 
   const handleToggleShift = async (staffId: string, onShift: boolean) => {
     setStaffBusyId(staffId)
@@ -248,7 +255,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // 매 tick마다 왕복 2번 대신 1번(Promise.all)만 나가게 한다 — 방 화면은 이미 리액션/참여자
   // 요약(3초) + 손님 경고 확인(5초)까지 별도로 폴링하고 있어, 굳이 더 늘릴 이유가 없다.
   useEffect(() => {
-    if (!state.isHost || !state.venue) return
+    if (!effectiveIsHost || !state.venue) return
     const load = () => {
       Promise.all([
         fetch(`/api/rooms/${code}/staff-shifts`).then(res => res.json()),
@@ -263,7 +270,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     load()
     const interval = setInterval(load, 5_000)
     return () => clearInterval(interval)
-  }, [state.isHost, state.venue, code])
+  }, [effectiveIsHost, state.venue, code])
 
   const handleAddMemo = async () => {
     if (!newMemo.trim()) return
@@ -536,6 +543,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   return (
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', paddingBottom: 96 }}>
+      {/* 개발자 미리보기 배너 — 실제로는 운영자인데 손님 화면을 보는 중임을 알려주고,
+          끄는 버튼을 준다(안 그러면 이 탭이 계속 손님으로 보여서 헷갈린다). */}
+      {previewingAsGuest && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 10, padding: '8px 16px',
+          background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span>👁 손님 화면 미리보기 중 (실제로는 운영자)</span>
+          <button onClick={() => { clearPreviewAsGuest(); window.location.reload() }}
+            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer' }}>
+            미리보기 종료
+          </button>
+        </div>
+      )}
       {/* 상단 바 — 브랜드 표시 + 나가기 */}
       <header style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -546,7 +568,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           <span style={{ fontSize: 15, fontWeight: 800 }}>LIview</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {state.isHost && state.venue && (
+          {effectiveIsHost && state.venue && (
             <button onClick={() => router.push(`/operator/settings/${state.venue!.id}`)} aria-label="매장 설정"
               style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 15, cursor: 'pointer' }}>
               ⚙
@@ -564,7 +586,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           운영자: 길게 눌러 좌석 이동, 짧게 눌러 메시지. */}
       {state.venue && state.seats.length > 0 && (
         <div style={{ position: 'relative' }}>
-          {state.isHost ? (
+          {effectiveIsHost ? (
             <>
               {armedSeatId && (
                 <div className="card-sm" style={{ margin: '0 20px 8px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -663,7 +685,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             </div>
 
             {/* 직원 교대 (Staff 도메인 §2.4) — 운영자 전용 */}
-            {state.isHost && state.venue && staffRoster.length > 0 && (
+            {effectiveIsHost && state.venue && staffRoster.length > 0 && (
               <div style={{ padding: '20px 20px 0' }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>직원 교대</p>
                 {staffError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{staffError}</InlineMessage>}
@@ -686,7 +708,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             )}
 
             {/* 운영 메모 (Operator Analytics 도메인 §2.10) — 운영자 전용 */}
-            {state.isHost && state.venue && (
+            {effectiveIsHost && state.venue && (
               <div style={{ padding: '20px 20px 0' }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>운영 메모</p>
                 {memoError && <InlineMessage type="error" style={{ marginBottom: 8 }}>{memoError}</InlineMessage>}
@@ -759,7 +781,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             </div>
 
             {/* 영업 종료 — 운영자 전용 */}
-            {state.isHost && (
+            {effectiveIsHost && (
               <div style={{ padding: '20px 20px 0' }}>
                 <button className="btn btn-secondary" onClick={handleEndRoom} disabled={endingRoom}
                   style={{ fontSize: 14, opacity: endingRoom ? 0.6 : 1 }}>
