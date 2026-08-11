@@ -740,7 +740,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                 <p style={{ fontSize: 12, color: 'var(--muted)' }}>총 {state.totalReactions}개 리액션</p>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {state.participants.map(p => {
+                {/* 좌석 선택 = 방 입장 완료(ADR-0001)이므로, 아직 좌석을 안 고른 참여자 행은
+                    입장이 완료되지 않은 상태다 — 운영자에게는 아직 "참여자"로 보여주지 않는다.
+                    운영자(host)는 좌석이 없어도 항상 포함한다. */}
+                {state.participants.filter(p => p.is_operator || p.seat_id).map(p => {
                   const isMe = p.id === roomData.participantId
                   const heartCount = state.heartCounts[p.id] ?? 0
                   const warnCount = state.warningCounts[p.id] ?? 0
