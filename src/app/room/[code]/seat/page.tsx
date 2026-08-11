@@ -67,7 +67,7 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
   if (passesGate) return <LoadingScreen />
 
   return (
-    <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+    <main style={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
       {previewingAsGuest && (
         <div style={{
           position: 'sticky', top: 0, zIndex: 10, padding: '8px 16px',
