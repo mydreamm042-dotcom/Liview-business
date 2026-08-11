@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { setSessionToken, storeRoomData } from '@/lib/session'
 import { Venue } from '@/lib/supabase/types'
 import BackButton from '@/components/BackButton'
 import LoadingScreen from '@/components/LoadingScreen'
@@ -23,6 +22,9 @@ export default function DevRoomsPage() {
   const [nicknames, setNicknames] = useState<Record<string, string>>({})
   const [joiningId, setJoiningId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  // 방금 만든 테스트 입장 링크 — 같은 탭에서 바로 열지 않는다(아래 handleTestJoin 주석 참고).
+  const [enterLink, setEnterLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetch('/api/venues')
@@ -47,6 +49,8 @@ export default function DevRoomsPage() {
   const handleTestJoin = async (venueId: string) => {
     setJoiningId(venueId)
     setError('')
+    setEnterLink(null)
+    setCopied(false)
     try {
       const res = await fetch(`/api/venues/${venueId}/dev-join`, {
         method: 'POST',
@@ -55,19 +59,33 @@ export default function DevRoomsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      // 이 브라우저가 앞으로 이 테스트 참여자로 행동하도록 세션 토큰을 맞춘다 —
-      // 운영자 로그인 세션 자체와는 별개(참여자는 익명 토큰 기반).
-      setSessionToken(data.session_token)
-      storeRoomData({
-        roomId: data.room.id, roomCode: data.room.code, roomName: data.room.name,
-        participantId: data.participant.id, nickname: data.participant.nickname,
+      // 같은 탭에서 바로 넘기지 않는다 — 방 화면의 isHost는 참여자 session_token이 아니라
+      // "이 브라우저가 운영자로 로그인돼 있는가"(Supabase Auth 세션)로만 판정되기 때문에,
+      // 지금 이 탭(운영자 로그인 상태)에서 그대로 이동하면 손님 세션으로 바꿔도 여전히
+      // 운영자 화면이 뜬다. 대신 링크를 만들어주고, 로그인 안 된 다른 브라우저/시크릿창에서
+      // 열도록 안내한다 — /dev/rooms/enter가 이 링크의 파라미터로 세션을 심어준다.
+      const params = new URLSearchParams({
+        code: data.room.code,
+        token: data.session_token,
+        roomId: data.room.id,
+        roomName: data.room.name,
+        participantId: data.participant.id,
+        nickname: data.participant.nickname,
       })
-      router.push(`/room/${data.room.code}`)
+      setEnterLink(`${window.location.origin}/dev/rooms/enter?${params.toString()}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : '테스트 입장에 실패했습니다')
     } finally {
       setJoiningId(null)
     }
+  }
+
+  const handleCopyLink = () => {
+    if (!enterLink) return
+    navigator.clipboard.writeText(enterLink).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   if (loadError === '운영자 로그인이 필요해요') {
@@ -98,6 +116,25 @@ export default function DevRoomsPage() {
       </p>
 
       {error && <div style={{ marginBottom: 16 }}><InlineMessage type="error">{error}</InlineMessage></div>}
+
+      {enterLink && (
+        <div className="card" style={{ padding: 16, marginBottom: 20, border: '1px solid var(--accent)' }}>
+          <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>테스트 입장 링크가 만들어졌어요</p>
+          <p style={{ fontSize: 12, color: 'var(--muted2)', lineHeight: 1.6, marginBottom: 10 }}>
+            지금 이 브라우저는 운영자로 로그인돼 있어서 이 링크를 눌러도 계속 운영자 화면이
+            떠요. <b>시크릿창(로그인 안 된 브라우저)</b>에 이 링크를 붙여넣어야 실제 손님
+            화면이 보입니다.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="input" readOnly value={enterLink} onFocus={e => e.target.select()}
+              style={{ flex: 1, padding: '8px 10px', fontSize: 11 }} />
+            <button className="btn btn-secondary" onClick={handleCopyLink}
+              style={{ width: 'auto', minHeight: 'auto', padding: '0 14px', fontSize: 13 }}>
+              {copied ? '복사됨' : '복사'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {venues.length === 0 && (
         <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', marginTop: 40 }}>등록된 매장이 없어요</p>
