@@ -12,8 +12,9 @@ import InlineMessage from '@/components/InlineMessage'
 // 좌석 선택 화면 확대 배율 범위/미니맵 크기 (ADR-0007, VARIABLES.md "Seating" 참고)
 const ZOOM_MIN = 1
 const ZOOM_MAX = 2.5
-const ZOOM_STEP = 0.5
 const MINIMAP_WIDTH = 104
+// 드래그가 아니라 탭이라고 판단할 포인터 이동 허용 오차(px)
+const DRAG_THRESHOLD_PX = 6
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
@@ -57,10 +58,11 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
     if (passesGate) router.replace(`/room/${code}`)
   }, [passesGate, code, router])
 
-  // ---------- 스크롤/확대 뷰포트 (ADR-0007 미니맵) ----------
-  // 메인 캔버스를 감싸는 스크롤 컨테이너. 확대 배율만큼 내부 콘텐츠를 실제로 키워서
-  // overflow:auto가 자연스럽게 스크롤(패닝)을 처리하게 한다 — 별도 제스처 핸들러 없이도
-  // 미니맵의 뷰포트 사각형을 scrollLeft/Top으로 그대로 계산할 수 있다.
+  // ---------- 스크롤/확대 뷰포트 (ADR-0007 미니맵, 제스처는 2026-08-12 갱신) ----------
+  // 메인 캔버스를 감싸는 컨테이너. 확대 배율만큼 내부 콘텐츠를 실제로 키우고, 이동/확대는
+  // 브라우저 기본 스크롤이 아니라 Pointer Events로 직접 구현한다 — 한 손가락(혹은 마우스)
+  // 드래그로 이동, 두 손가락 핀치로 확대/축소. 그래야 확대 중에도 핀치 중심점을 고정할 수
+  // 있고, 마우스 드래그 이동(터치 없는 데스크톱)까지 같은 코드로 처리된다.
   // ref 대신 state로 DOM 노드를 들고 있는다 — 이 화면은 로딩 중엔 <LoadingScreen/>만 그리다가
   // (state.initialLoaded==false) 나중에야 실제 캔버스가 마운트되므로, 마운트 시 한 번만 도는
   // 빈 deps 배열의 useEffect+useRef 조합으로는 그 늦은 마운트를 놓친다. state로 들면 노드가
@@ -69,8 +71,17 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
   const [baseSize, setBaseSize] = useState({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1)
   const [viewportRect, setViewportRect] = useState({ x: 0, y: 0, w: 100, h: 100 })
-  const zoomCenterRef = useRef<{ fracX: number; fracY: number } | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
+  const zoomFocusRef = useRef<{ fracX: number; fracY: number } | null>(null)
   const scrollFrameRef = useRef<number | null>(null)
+  // 활성 포인터(터치/마우스) 위치 — 개수로 "드래그 이동"(1개)과 "핀치 확대"(2개)를 구분한다
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const dragStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null)
+  const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null)
+  // 이번 제스처가 임계값을 넘는 드래그/핀치로 판정됐는지 — true면 포인터를 뗄 때 발생하는
+  // click을 좌석 탭으로 오인하지 않게 막아야 한다(안 그러면 스크롤된 위치의 다른 좌석이
+  // 실수로 선택된다).
+  const draggedRef = useRef(false)
 
   useEffect(() => {
     if (!viewportEl) return
@@ -94,14 +105,16 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
     })
   }, [viewportEl, contentWidth, contentHeight])
 
-  // 줌이 바뀌면(혹은 화면 크기가 바뀌면), 줌 버튼을 누르기 전 보고 있던 중심점을 유지하며
-  // 스크롤 위치를 다시 잡고 뷰포트 사각형을 새로 계산한다.
+  // 줌이 바뀌면(핀치/휠 확대 또는 화면 크기 변화), 제스처 중심점을 유지하며 스크롤 위치를
+  // 다시 잡고 뷰포트 사각형을 새로 계산한다. 콘텐츠 크기는 zoom state가 반영된 다음 렌더에서만
+  // 실제 px로 바뀌므로, "어디를 중심으로 확대했는지"를 미리 fraction으로 저장해뒀다가 여기서
+  // 새 크기 기준으로 스크롤을 계산한다.
   useEffect(() => {
-    const center = zoomCenterRef.current
-    if (viewportEl && center && contentWidth > 0 && contentHeight > 0) {
-      viewportEl.scrollLeft = clamp(center.fracX * contentWidth - viewportEl.clientWidth / 2, 0, Math.max(0, contentWidth - viewportEl.clientWidth))
-      viewportEl.scrollTop = clamp(center.fracY * contentHeight - viewportEl.clientHeight / 2, 0, Math.max(0, contentHeight - viewportEl.clientHeight))
-      zoomCenterRef.current = null
+    const focus = zoomFocusRef.current
+    if (viewportEl && focus && contentWidth > 0 && contentHeight > 0) {
+      viewportEl.scrollLeft = clamp(focus.fracX * contentWidth - viewportEl.clientWidth / 2, 0, Math.max(0, contentWidth - viewportEl.clientWidth))
+      viewportEl.scrollTop = clamp(focus.fracY * contentHeight - viewportEl.clientHeight / 2, 0, Math.max(0, contentHeight - viewportEl.clientHeight))
+      zoomFocusRef.current = null
     }
     updateViewportRect()
   }, [viewportEl, contentWidth, contentHeight, updateViewportRect])
@@ -114,16 +127,117 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
     })
   }
 
-  const handleZoom = (delta: number) => {
-    const next = clamp(Math.round((zoom + delta) * 10) / 10, ZOOM_MIN, ZOOM_MAX)
-    if (next === zoom) return
-    if (viewportEl && contentWidth > 0 && contentHeight > 0) {
-      zoomCenterRef.current = {
-        fracX: (viewportEl.scrollLeft + viewportEl.clientWidth / 2) / contentWidth,
-        fracY: (viewportEl.scrollTop + viewportEl.clientHeight / 2) / contentHeight,
+  // 클라이언트 좌표(px)를 "콘텐츠 기준 0~1 비율"로 바꾼다 — 핀치/휠 확대의 중심점을 잡을 때 쓴다.
+  const clientPointToContentFrac = (clientX: number, clientY: number) => {
+    if (!viewportEl || contentWidth === 0 || contentHeight === 0) return null
+    const rect = viewportEl.getBoundingClientRect()
+    return {
+      fracX: (viewportEl.scrollLeft + (clientX - rect.left)) / contentWidth,
+      fracY: (viewportEl.scrollTop + (clientY - rect.top)) / contentHeight,
+    }
+  }
+
+  const setZoomAroundClientPoint = (nextZoom: number, clientX: number, clientY: number) => {
+    const clamped = clamp(Math.round(nextZoom * 100) / 100, ZOOM_MIN, ZOOM_MAX)
+    if (clamped === zoom) return
+    const focus = clientPointToContentFrac(clientX, clientY)
+    if (focus) zoomFocusRef.current = focus
+    setZoom(clamped)
+  }
+
+  const pinchInfo = () => {
+    const pts = Array.from(pointersRef.current.values())
+    if (pts.length < 2) return null
+    const [a, b] = pts
+    return { distance: Math.hypot(b.x - a.x, b.y - a.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 }
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    // 일부러 setPointerCapture를 안 쓴다 — 캡처를 걸면 이후 이 포인터의 click까지 캡처한
+    // 요소로 강제 리타겟되어(스펙 동작), 정작 손가락 밑에 있던 좌석 버튼은 이벤트 경로에서
+    // 아예 빠지고 onClick이 영영 안 불린다(좌석 탭 자체가 막히는 심각한 부작용이라 캡처보다
+    // 손해가 크다). 캔버스가 화면 대부분을 차지해서, 캡처 없이도 화면 밖으로 손가락이
+    // 나가는 흔치 않은 경우 정도만 이동이 멈추는 수준의 사소한 손실이다.
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pointersRef.current.size === 2) {
+      const info = pinchInfo()
+      if (info) pinchStartRef.current = { distance: info.distance, zoom }
+      dragStartRef.current = null
+    } else if (pointersRef.current.size === 1 && viewportEl) {
+      dragStartRef.current = { x: e.clientX, y: e.clientY, scrollLeft: viewportEl.scrollLeft, scrollTop: viewportEl.scrollTop }
+      setIsPanning(true)
+    }
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    // 두 손가락 = 핀치 확대/축소. 두 점의 거리 변화 비율만큼 배율을 바꾸고, 두 손가락의
+    // 중점이 화면에서 그대로 유지되도록 스크롤을 보정한다.
+    if (pointersRef.current.size === 2 && pinchStartRef.current && viewportEl) {
+      const info = pinchInfo()
+      if (!info || pinchStartRef.current.distance === 0) return
+      draggedRef.current = true
+      const ratio = info.distance / pinchStartRef.current.distance
+      setZoomAroundClientPoint(pinchStartRef.current.zoom * ratio, info.midX, info.midY)
+      return
+    }
+
+    // 한 손가락(또는 마우스 버튼을 누른 채) 이동 = 화면 이동(패닝)
+    if (pointersRef.current.size === 1 && dragStartRef.current && viewportEl) {
+      const dx = e.clientX - dragStartRef.current.x
+      const dy = e.clientY - dragStartRef.current.y
+      if (!draggedRef.current && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) draggedRef.current = true
+      if (draggedRef.current) {
+        const maxScrollX = Math.max(0, contentWidth - viewportEl.clientWidth)
+        const maxScrollY = Math.max(0, contentHeight - viewportEl.clientHeight)
+        viewportEl.scrollLeft = clamp(dragStartRef.current.scrollLeft - dx, 0, maxScrollX)
+        viewportEl.scrollTop = clamp(dragStartRef.current.scrollTop - dy, 0, maxScrollY)
       }
     }
-    setZoom(next)
+  }
+
+  const endPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointersRef.current.delete(e.pointerId)
+    if (pointersRef.current.size < 2) pinchStartRef.current = null
+    if (pointersRef.current.size === 0) {
+      dragStartRef.current = null
+      setIsPanning(false)
+      // 한 손가락(또는 마우스) 드래그 뒤엔 브라우저가 곧바로 click을 발생시키므로 그때
+      // draggedRef를 읽어서 지워야(handleClickCapture) 그 click을 좌석 탭으로 오인하지 않는다.
+      // 반면 두 손가락 핀치는 손을 떼도 click이 아예 발생하지 않아 그 경로로는 절대
+      // draggedRef가 지워지지 않는다 — setTimeout(0)으로 "이번 인터랙션에서 올 수 있는 click은
+      // 이미 다 처리됐다" 시점까지 미뤄서 안전망으로 한 번 더 지운다(click이 먼저 왔다면 이미
+      // false라 아무 효과 없음).
+      setTimeout(() => { draggedRef.current = false }, 0)
+    }
+  }
+
+  // 방금 드래그/핀치를 했다면 그 직후에 브라우저가 발생시키는 click은 좌석 탭이 아니라
+  // 제스처의 잔여물이다 — 캡처 단계에서 막아 실제 좌석 버튼까지 전파되지 않게 한다.
+  const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (draggedRef.current) {
+      e.stopPropagation()
+      e.preventDefault()
+      draggedRef.current = false
+    }
+  }
+
+  // 트랙패드: 두 손가락 스크롤 = 패닝, (브라우저가 합성하는) Ctrl+휠 = 핀치 확대와 동일하게 처리
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!viewportEl) return
+    if (e.ctrlKey) {
+      e.preventDefault()
+      setZoomAroundClientPoint(zoom - e.deltaY * 0.01, e.clientX, e.clientY)
+      return
+    }
+    const maxScrollX = Math.max(0, contentWidth - viewportEl.clientWidth)
+    const maxScrollY = Math.max(0, contentHeight - viewportEl.clientHeight)
+    viewportEl.scrollLeft = clamp(viewportEl.scrollLeft + e.deltaX, 0, maxScrollX)
+    viewportEl.scrollTop = clamp(viewportEl.scrollTop + e.deltaY, 0, maxScrollY)
   }
 
   // ---------- 좌석 가선택 / 확정 (ADR-0007) ----------
@@ -196,12 +310,23 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
       {error && <div style={{ padding: '8px 20px 0' }}><InlineMessage type="error">{error}</InlineMessage></div>}
 
       {/* 자리배치도를 남은 세로 공간 전체에 크게 그린다 — 이 화면의 목적 자체가 좌석 선택이라
-          방 화면(상단에 작게 얹는 방식)과 달리 화면을 다 내준다. 확대 중엔 이 안에서 스크롤한다. */}
+          방 화면(상단에 작게 얹는 방식)과 달리 화면을 다 내준다. 한 손가락/마우스 드래그로
+          이동, 두 손가락 핀치로 확대/축소한다(브라우저 기본 스크롤 대신 직접 구현 — 핀치 중심점
+          고정과 마우스 드래그를 같은 코드로 처리하기 위해). */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div
           ref={setViewportEl}
           onScroll={handleScroll}
-          style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative', touchAction: 'pan-x pan-y' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endPointer}
+          onPointerCancel={endPointer}
+          onClickCapture={handleClickCapture}
+          onWheel={handleWheel}
+          style={{
+            width: '100%', height: '100%', overflow: 'hidden', position: 'relative',
+            touchAction: 'none', cursor: isPanning ? 'grabbing' : zoom > ZOOM_MIN ? 'grab' : 'default',
+          }}
         >
           <div style={{ width: contentWidth || '100%', height: contentHeight || '100%' }}>
             <SeatMap
@@ -219,11 +344,10 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
           </div>
         </div>
 
-        {/* 미니맵 — 배치 규모와 무관하게 항상 표시(ADR-0007). 뷰포트 사각형이 현재 확대/스크롤
-            범위를 보여준다. 이 오버레이 영역 밑에 실제 좌석이 깔려 있을 수 있어(캔버스 우상단
-            근처 좌석) 감싸는 박스 자체는 클릭을 가로채지 않게 하고, 확대/축소 버튼만 다시
-            pointerEvents:auto로 켠다. */}
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, pointerEvents: 'none' }}>
+        {/* 미니맵 — 배치 규모와 무관하게 항상 표시(ADR-0007). 뷰포트 사각형이 현재 확대/이동
+            범위를 보여준다. 순수 표시용이라 pointerEvents:none — 이 오버레이 밑에 실제 좌석이
+            깔려 있어도(캔버스 우상단 근처 좌석) 탭/드래그가 그대로 통과한다. */}
+        <div style={{ position: 'absolute', top: 12, right: 12, pointerEvents: 'none' }}>
           <SeatMiniMap
             seats={state.seats}
             layoutItems={state.layoutItems}
@@ -233,24 +357,6 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
             width={MINIMAP_WIDTH}
             height={minimapHeight}
           />
-          <div style={{ display: 'flex', gap: 4, pointerEvents: 'auto' }}>
-            <button type="button" onClick={() => handleZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN} aria-label="지도 축소"
-              style={{
-                width: 30, height: 30, borderRadius: 999, background: 'var(--card2)', border: '1px solid var(--border)',
-                color: 'var(--text2)', fontSize: 16, fontWeight: 700, cursor: zoom <= ZOOM_MIN ? 'default' : 'pointer',
-                opacity: zoom <= ZOOM_MIN ? 0.4 : 1, lineHeight: 1,
-              }}>
-              −
-            </button>
-            <button type="button" onClick={() => handleZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX} aria-label="지도 확대"
-              style={{
-                width: 30, height: 30, borderRadius: 999, background: 'var(--card2)', border: '1px solid var(--border)',
-                color: 'var(--text2)', fontSize: 16, fontWeight: 700, cursor: zoom >= ZOOM_MAX ? 'default' : 'pointer',
-                opacity: zoom >= ZOOM_MAX ? 0.4 : 1, lineHeight: 1,
-              }}>
-              +
-            </button>
-          </div>
         </div>
       </div>
 

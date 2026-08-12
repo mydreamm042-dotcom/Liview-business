@@ -53,8 +53,9 @@
 | 좌석/배치 요소 좌표계 | 캔버스 대비 0~100% (`position_x`/`position_y` = 중심) | `venue_seats`, `venue_layout_items` 공통 |
 | 배치 요소 최소 크기 | 4% (`MIN_SIZE_PCT`) | `src/app/operator/settings/[id]/seats/page.tsx` |
 | 배치 요소 기본 크기 (%) | table 26×16 · box 24×22 · door 18×6 · text 20×6 | `src/app/api/venues/[id]/layout/route.ts` |
-| **좌석 선택 화면 확대(zoom) 범위 (ADR-0007)** | 1.0~2.5배, 0.5배 단위 (`ZOOM_MIN`/`ZOOM_MAX`/`ZOOM_STEP`) | `src/app/room/[code]/seat/page.tsx` |
+| **좌석 선택 화면 확대(zoom) 범위 (ADR-0007)** | 1.0~2.5배, 연속값 (`ZOOM_MIN`/`ZOOM_MAX`) — 버튼이 아니라 두 손가락 핀치/트랙패드 Ctrl+휠로 조작 | `src/app/room/[code]/seat/page.tsx` |
 | **미니맵 너비 (ADR-0007)** | 104px (`MINIMAP_WIDTH`, 높이는 메인 캔버스와 같은 비율로 자동 계산) | `src/app/room/[code]/seat/page.tsx` |
+| 드래그/탭 구분 임계값 | 6px (`DRAG_THRESHOLD_PX`) — 이동이 이보다 작으면 탭으로 간주 | `src/app/room/[code]/seat/page.tsx` |
 
 ## 기타
 
