@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { setSessionToken, storeRoomData } from '@/lib/session'
+import { setSessionToken, storeRoomData, setPreviewAsGuest } from '@/lib/session'
 import { Venue } from '@/lib/supabase/types'
 import BackButton from '@/components/BackButton'
 import LoadingScreen from '@/components/LoadingScreen'
@@ -15,6 +15,11 @@ interface Session { id: string; code?: string; name: string; status: string }
 // 손님으로 입장시킨다(/api/venues/[id]/dev-join). 로그인한 운영자 본인 소유 매장에만
 // 쓸 수 있다 — 공개 기능이 아니다. 운영 배포에 노출해도 되지만 손님에게 안내할 이유는
 // 없는 화면이라 홈 화면 등에서 링크로 연결하지 않는다.
+//
+// 같은 탭에서 바로 방 화면으로 넘어간다 — 방 화면의 isHost는 원래 참여자 session_token이
+// 아니라 운영자 로그인 세션으로만 판정되어 같은 탭에서는 계속 호스트 화면이 떴었는데,
+// setPreviewAsGuest()로 렌더링만 손님으로 뒤집는다(session.ts 주석 참고). 별도 브라우저나
+// 시크릿창이 더 이상 필요 없다.
 export default function DevRoomsPage() {
   const router = useRouter()
   const [venues, setVenues] = useState<Venue[] | null>(null)
@@ -55,13 +60,14 @@ export default function DevRoomsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      // 이 브라우저가 앞으로 이 테스트 참여자로 행동하도록 세션 토큰을 맞춘다 —
-      // 운영자 로그인 세션 자체와는 별개(참여자는 익명 토큰 기반).
+      // 이 브라우저가 앞으로 이 테스트 참여자로 행동하도록 세션 토큰을 맞추고, 렌더링을
+      // 손님으로 고정한다(운영자 로그인 세션 자체는 안 건드림 — 위 주석 참고).
       setSessionToken(data.session_token)
       storeRoomData({
         roomId: data.room.id, roomCode: data.room.code, roomName: data.room.name,
         participantId: data.participant.id, nickname: data.participant.nickname,
       })
+      setPreviewAsGuest()
       router.push(`/room/${data.room.code}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : '테스트 입장에 실패했습니다')

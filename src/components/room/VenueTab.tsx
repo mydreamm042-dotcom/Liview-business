@@ -10,20 +10,18 @@ function fmtTime(t: string | null) {
 }
 
 // 방 화면 "매장" 탭 — 매장명/실시간 별점/현재원/HOT 지수 + HOT 버튼/마감시간/소개.
-// 좌석을 아직 안 고른 손님에게는 HOT 버튼 자리에 안내 문구를 보여준다(디자인 1번 화면).
+// 좌석 선택이 방 입장의 전제조건이므로(ADR-0001) 이 탭에 도달한 손님은 이미 좌석이 있다 —
+// "좌석 선택 전" 분기는 따로 두지 않는다.
 export default function VenueTab({
-  venue, moodAverage, occupied, capacity, hotIndex, hasSeat, businessHours,
-  onHot, hotDisabledLabel,
+  venue, moodAverage, occupied, capacity, hotIndex, businessHours, onHot,
 }: {
   venue: VenueBranding | null
   moodAverage: number | null
   occupied: number
   capacity: number
   hotIndex: number
-  hasSeat: boolean
   businessHours: VenueBusinessHours | null
   onHot: () => void
-  hotDisabledLabel: string
 }) {
   const lastOrder = fmtTime(businessHours?.last_order_time ?? null)
   const closeTime = businessHours?.is_24h ? null : fmtTime(businessHours?.close_time ?? null)
@@ -61,21 +59,11 @@ export default function VenueTab({
         </span>
       </div>
 
-      {/* HOT 버튼 (좌석 선택 전에는 안내로 대체) */}
-      {hasSeat ? (
-        <button onClick={onHot} className="btn btn-primary"
-          style={{ fontSize: 22, minHeight: 68, borderRadius: 14, marginBottom: 22 }}>
-          HOT 🔥
-        </button>
-      ) : (
-        <div style={{
-          minHeight: 68, borderRadius: 14, background: 'var(--card2)', border: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22,
-          fontSize: 16, fontWeight: 700, color: 'var(--text2)', textAlign: 'center', padding: '0 16px',
-        }}>
-          {hotDisabledLabel}
-        </div>
-      )}
+      {/* HOT 버튼 */}
+      <button onClick={onHot} className="btn btn-primary"
+        style={{ fontSize: 22, minHeight: 68, borderRadius: 14, marginBottom: 22 }}>
+        HOT 🔥
+      </button>
 
       {/* 마감 시간 */}
       {(lastOrder || closeTime || businessHours?.is_24h) && (
