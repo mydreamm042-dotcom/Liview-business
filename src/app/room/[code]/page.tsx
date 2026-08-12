@@ -10,7 +10,6 @@ import InteractionModal from '@/components/InteractionModal'
 import KindnessVoteModal from '@/components/KindnessVoteModal'
 import HeartToast, { showToast } from '@/components/HeartToast'
 import SeatMap from '@/components/SeatMap'
-import LayoutItemShape from '@/components/LayoutItemShape'
 import RoomTabBar, { RoomTab } from '@/components/room/RoomTabBar'
 import VenueTab from '@/components/room/VenueTab'
 import StarTab from '@/components/room/StarTab'
@@ -19,7 +18,7 @@ import { useQna } from '@/hooks/useQna'
 import { Participant, StaffMember, StaffShift } from '@/lib/supabase/types'
 import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS, STAR_COOLDOWN_MS } from '@/lib/cooldown'
-import { isOccupantHot, fmtSeatElapsed } from '@/lib/seatDisplay'
+import { fmtSeatElapsed } from '@/lib/seatDisplay'
 import InlineMessage from '@/components/InlineMessage'
 
 function fmtCd(s: number) {
@@ -188,7 +187,6 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     if (!occupant) return
     pressStartRef.current = { seatId, startedAt: Date.now() }
   }
-  const cancelSeatPress = () => { pressStartRef.current = null }
 
   // 이미 무장된 상태의 탭은 "이동 완료/취소"고, 무장 안 된 상태의 탭은 눌린 시간에 따라
   // "무장 시작"(2초 이상) 또는 "손님 케어 메뉴"(짧게)로 갈린다.
@@ -595,58 +593,31 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                 </div>
               )}
               {careError && <div style={{ padding: '0 20px 8px' }}><InlineMessage type="error">{careError}</InlineMessage></div>}
-              <div style={{ position: 'relative', width: '100%', height: SEAT_CANVAS_HEIGHT, background: 'var(--bg2)', overflow: 'hidden' }}>
-                {/* 배치 요소(테이블/구역/출입문/텍스트)는 좌석 뒤 배경으로 먼저 그린다 */}
-                {state.layoutItems.map(item => <LayoutItemShape key={item.id} item={item} />)}
-                {state.seats.map(seat => {
-                  const occupant = state.participants.find(p => p.seat_id === seat.id)
-                  const occupantHot = occupant
-                    ? isOccupantHot(occupant.id, state.reactions.filter(r => r.type === 'hot'), Date.now())
-                    : false
-                  const armed = armedSeatId === seat.id
-                  return (
-                    <div key={seat.id}
-                      onPointerDown={() => startSeatPress(seat.id, occupant)}
-                      onPointerUp={() => handleSeatRelease(seat.id, occupant)}
-                      onPointerLeave={cancelSeatPress}
-                      onContextMenu={e => { e.preventDefault(); if (occupant) setMenuTarget(occupant) }}
-                      style={{
-                        position: 'absolute', left: `${seat.position_x}%`, top: `${seat.position_y}%`,
-                        transform: 'translate(-50%, -50%)', cursor: 'pointer', userSelect: 'none', touchAction: 'none',
-                      }}
-                    >
-                      {occupantHot && (
-                        <span className="fire-pulse" style={{ position: 'absolute', left: '50%', top: -14, transform: 'translateX(-50%)', fontSize: 26, lineHeight: 1, pointerEvents: 'none' }}>🔥</span>
-                      )}
-                      <div style={{
-                        position: 'relative', width: 38, height: 38, borderRadius: 999,
-                        border: `2px solid ${armed ? '#fff' : occupant ? 'var(--muted)' : 'var(--accent)'}`,
-                        background: occupant ? 'var(--card)' : 'transparent',
-                        color: occupant ? 'var(--muted)' : 'var(--accent)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 800, opacity: occupant ? 0.85 : 1,
-                      }}>
-                        {seat.label}
-                      </div>
-                      {/* 운영자에게는 누가 얼마나 앉아있는지도 함께 보여준다 — 손님 케어
-                          (메시지 보내기/좌석 이동)를 판단하려면 번호만으로는 부족하다. */}
-                      {occupant && (
-                        <div style={{
-                          position: 'absolute', top: 40, left: '50%', transform: 'translateX(-50%)',
-                          textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
-                        }}>
-                          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)' }}>{occupant.nickname}</p>
-                          {occupant.seat_assigned_at && (
-                            <p style={{ fontSize: 9, color: 'var(--muted)' }}>
-                              {fmtSeatElapsed(occupant.seat_assigned_at, Date.now())}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+              {/* 손님 뷰와 같은 SeatMap을 쓰되 운영자 전용 상호작용(롱프레스 이동 / 짧게 눌러
+                  케어 메뉴 / 닉네임·착석시간 표시)만 얹는다 — 확대·이동·미니맵을 두 뷰가
+                  똑같이 갖게 하려면 캔버스를 따로 그리지 않고 공유해야 한다(ADR-0008). */}
+              <SeatMap
+                seats={state.seats}
+                participants={state.participants}
+                hotReactions={state.reactions.filter(r => r.type === 'hot')}
+                now={Date.now()}
+                height={SEAT_CANVAS_HEIGHT}
+                layoutItems={state.layoutItems}
+                armedSeatId={armedSeatId}
+                onSeatPressStart={(seat, occupant) => startSeatPress(seat.id, occupant)}
+                onSeatPressEnd={(seat, occupant) => handleSeatRelease(seat.id, occupant)}
+                onSeatContextMenu={(seat, occupant) => { if (occupant) setMenuTarget(occupant) }}
+                renderSeatCaption={(seat, occupant) => occupant && (
+                  <>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)' }}>{occupant.nickname}</p>
+                    {occupant.seat_assigned_at && (
+                      <p style={{ fontSize: 9, color: 'var(--muted)' }}>
+                        {fmtSeatElapsed(occupant.seat_assigned_at, Date.now())}
+                      </p>
+                    )}
+                  </>
+                )}
+              />
             </>
           ) : (
             <SeatMap

@@ -75,7 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
         .order('sort_order', { ascending: true }),
       supabase
         .from('venue_layout_items')
-        .select('id, venue_id, kind, label, position_x, position_y, width, height, sort_order, created_at')
+        .select('id, venue_id, kind, label, position_x, position_y, width, height, rotation, sort_order, created_at')
         .eq('venue_id', room.venue_id)
         .order('sort_order', { ascending: true }),
     ])

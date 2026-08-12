@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { VenuePublicDetail, VenueCategory } from '@/lib/supabase/types'
+import { Participant, VenuePublicDetail, VenueCategory } from '@/lib/supabase/types'
 import TrendLine from '@/components/TrendLine'
+import SeatMap from '@/components/SeatMap'
 
 const CATEGORY_LABELS: Record<string, string> = {
   pocha: '포차', bar: '바', pub: '펍', wine_bar: '와인바', cafe: '카페', event_hall: '행사장', etc: '기타',
@@ -163,7 +164,7 @@ export default function VenueDetailSheet({ venueId, distanceKm, onClose }: {
                 {tab === 'hot' && <HotTab detail={detail} />}
                 {tab === 'star' && <StarTab detail={detail} />}
                 {tab === 'chat' && <ChatTab enabled={venue.public_chat_enabled} messages={chat} />}
-                {tab === 'seat' && <SeatTab seats={detail.seats} participantCount={detail.participant_count} />}
+                {tab === 'seat' && <SeatTab detail={detail} />}
               </>
             )}
           </div>
@@ -241,32 +242,54 @@ function ChatTab({ enabled, messages }: { enabled: boolean; messages: LiveMessag
   )
 }
 
-function SeatTab({ seats, participantCount }: { seats: { label: string; occupied: boolean }[]; participantCount: number }) {
+const SEAT_CANVAS_HEIGHT = 260
+
+// 좌석 탭 — 실제 자리배치도를 그대로 보여준다 (§2.7, 2026-08-12 ADR-0008로 집계 숫자에서 승격).
+// 비참여자용 읽기 전용 뷰라 좌석을 누를 수 없고(onSeatClick 없음), 확대/이동·미니맵만 손님
+// 화면과 동일하게 동작한다.
+function SeatTab({ detail }: { detail: VenuePublicDetail }) {
+  const { seats, layout_items: layoutItems, participant_count: participantCount } = detail
+
+  // SeatMap은 "참여자 배열의 seat_id"로 점유를 판단하지만, 이 공개 화면은 참여자 정보를
+  // 받지 않는다(개인식별 정보 비노출, §2.6). 서버가 준 occupied 플래그만 가지고 익명 점유자를
+  // 만들어 넘겨서, 어떤 자리가 찼는지만 손님 화면과 똑같은 명암으로 보이게 한다.
+  const anonymousOccupants: Participant[] = useMemo(
+    () => seats.filter(s => s.occupied).map(s => ({
+      id: `occupied-${s.id}`,
+      room_id: '',
+      nickname: '',
+      session_token: '',
+      joined_at: '',
+      left_at: null,
+      seat_id: s.id,
+    })),
+    [seats],
+  )
+
   if (seats.length === 0) {
     return <p style={{ fontSize: 13, color: 'var(--muted2)', textAlign: 'center', padding: '32px 20px' }}>등록된 좌석이 없어요</p>
   }
+
   const occupied = seats.filter(s => s.occupied).length
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
         <div><span style={{ fontSize: 24, fontWeight: 800 }}>{occupied}</span><span style={{ fontSize: 13, color: 'var(--muted2)' }}> / {seats.length} 좌석 사용 중</span></div>
         <div><span style={{ fontSize: 24, fontWeight: 800 }}>{participantCount}</span><span style={{ fontSize: 13, color: 'var(--muted2)' }}>명 참여 중</span></div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 8 }}>
-        {seats.map((s, i) => (
-          <div key={i} style={{
-            padding: '12px 8px', borderRadius: 12, textAlign: 'center', fontSize: 13, fontWeight: 700,
-            background: s.occupied ? 'rgba(225,6,0,0.12)' : 'var(--card2)',
-            border: `1px solid ${s.occupied ? 'rgba(225,6,0,0.4)' : 'var(--border)'}`,
-            color: s.occupied ? 'var(--accent)' : 'var(--muted2)',
-          }}>
-            {s.label}
-            <div style={{ fontSize: 10, fontWeight: 600, marginTop: 2, color: s.occupied ? 'var(--accent)' : 'var(--muted)' }}>
-              {s.occupied ? '사용 중' : '빈자리'}
-            </div>
-          </div>
-        ))}
+      <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <SeatMap
+          seats={seats}
+          participants={anonymousOccupants}
+          hotReactions={[]}
+          now={Date.now()}
+          height={SEAT_CANVAS_HEIGHT}
+          layoutItems={layoutItems}
+        />
       </div>
+      <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>
+        어두운 자리는 사용 중이에요 · 두 손가락으로 확대할 수 있어요
+      </p>
     </div>
   )
 }

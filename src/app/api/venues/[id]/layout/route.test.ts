@@ -34,6 +34,28 @@ describe('POST /api/venues/[id]/layout — 배치 요소 추가', () => {
     expect(status).toBe(400)
   })
 
+  // ADR-0008: table 폐지(box와 기능 중복), line 신설
+  it('폐지된 table 종류는 400', async () => {
+    mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([], { user: { id: 'u1' } }))
+    const { status } = await callPost('v1', { kind: 'table' })
+    expect(status).toBe(400)
+  })
+
+  it('신설된 line 종류는 허용된다', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'u1' } },
+        { count: 0 },
+        { data: { id: 'l1', kind: 'line' } },
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status, json } = await callPost('v1', { kind: 'line' })
+    expect(status).toBe(200)
+    expect(json.item.kind).toBe('line')
+  })
+
   it('텍스트는 내용이 비어있으면 400', async () => {
     mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([], { user: { id: 'u1' } }))
     const { status } = await callPost('v1', { kind: 'text', label: '  ' })
@@ -42,7 +64,7 @@ describe('POST /api/venues/[id]/layout — 배치 요소 추가', () => {
 
   it('로그인 안 했으면 401', async () => {
     mockCreateServerSupabaseClient.mockResolvedValue(makeFakeSupabase([], { user: null }))
-    const { status } = await callPost('v1', { kind: 'table' })
+    const { status } = await callPost('v1', { kind: 'box' })
     expect(status).toBe(401)
   })
 
@@ -55,7 +77,7 @@ describe('POST /api/venues/[id]/layout — 배치 요소 추가', () => {
       { user: { id: 'impostor' } },
     )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
-    const { status } = await callPost('v1', { kind: 'table' })
+    const { status } = await callPost('v1', { kind: 'box' })
     expect(status).toBe(403)
   })
 
@@ -82,18 +104,48 @@ describe('PATCH /api/venues/[id]/layout — 위치/크기/라벨 수정', () => 
     expect(status).toBe(400)
   })
 
-  it('크기는 최소값 아래로 못 내려간다 (캔버스에서 사라지는 것 방지)', async () => {
+  // ADR-0008로 최소/최대 크기 제한을 폐지했다 — 넓거나 다층인 매장에서 확대해 아주 작게
+  // 배치하는 걸 막지 않기 위함. 아주 작은 값도 그대로 저장돼야 한다.
+  it('아주 작은 크기도 그대로 저장된다 (크기 제한 폐지, ADR-0008)', async () => {
     const fake = makeFakeSupabase(
       [
         { data: { id: 'v1', owner_id: 'u1' } }, // verifyVenueOwner
-        { data: { id: 'l1', width: 3 } },       // update 결과
+        { data: { id: 'l1', width: 0.5 } },     // update 결과
       ],
       { user: { id: 'u1' } },
     )
     mockCreateServerSupabaseClient.mockResolvedValue(fake)
     const { status } = await callPatch('v1', { item_id: 'l1', width: 0.5 })
     expect(status).toBe(200)
-    expect(fake._updated[0]).toEqual({ width: 3 })
+    expect(fake._updated[0]).toEqual({ width: 0.5 })
+  })
+
+  it('0 이하 크기는 무시한다 (요소가 사라져 다시 못 고치는 상태 방지)', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'u1' } },
+        { data: { id: 'l1' } },
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status } = await callPatch('v1', { item_id: 'l1', width: 0, height: 12 })
+    expect(status).toBe(200)
+    expect(fake._updated[0]).toEqual({ height: 12 })
+  })
+
+  it('선 회전각을 저장한다 (line 신설, ADR-0008)', async () => {
+    const fake = makeFakeSupabase(
+      [
+        { data: { id: 'v1', owner_id: 'u1' } },
+        { data: { id: 'l1', rotation: 45 } },
+      ],
+      { user: { id: 'u1' } },
+    )
+    mockCreateServerSupabaseClient.mockResolvedValue(fake)
+    const { status } = await callPatch('v1', { item_id: 'l1', rotation: 45 })
+    expect(status).toBe(200)
+    expect(fake._updated[0]).toEqual({ rotation: 45 })
   })
 
   it('위치는 캔버스 밖으로 못 나간다', async () => {
