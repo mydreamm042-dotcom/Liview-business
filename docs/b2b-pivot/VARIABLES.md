@@ -51,8 +51,9 @@
 |------|-----|------|
 | 운영자 좌석 강제 이동 롱프레스 시간 | 2,000ms | `src/app/room/[code]/page.tsx` (`LONG_PRESS_MS`) |
 | 좌석/배치 요소 좌표계 | 캔버스 대비 0~100% (`position_x`/`position_y` = 중심) | `venue_seats`, `venue_layout_items` 공통 |
-| 배치 요소 최소 크기 | 4% (`MIN_SIZE_PCT`) | `src/app/operator/settings/[id]/seats/page.tsx` |
-| 배치 요소 기본 크기 (%) | table 26×16 · box 24×22 · door 18×6 · text 20×6 | `src/app/api/venues/[id]/layout/route.ts` |
+| 배치 요소 최소/최대 크기 | ~~4%(`MIN_SIZE_PCT`)~~ 제한 폐지 (2026-08-12, ADR-0008) | `src/app/operator/settings/[id]/seats/page.tsx` — 코드 반영 시 상수 제거 |
+| 배치 요소 기본 크기 (%) | box 24×22 · door 18×6 · text 20×6 · line(신규, 크기 미정) — ~~table 26×16~~은 폐지 | `src/app/api/venues/[id]/layout/route.ts` |
+| 좌석 고정 렌더링 크기 (신규, 2026-08-12, ADR-0008) | **미정** — 기존 `table` 장식 요소 평균 크기(26×16%)를 근거로 구현 시 산출. 현재는 `SeatMap.tsx`에 38px 원형으로 하드코딩되어 있음 | `src/components/SeatMap.tsx` |
 
 ## 기타
 
