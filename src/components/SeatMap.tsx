@@ -10,7 +10,7 @@ import LayoutItemShape from './LayoutItemShape'
 // position_x/position_y(0~100%)를 그대로 절대 위치로 쓴다 (BUSINESS_RULES.md §2.8).
 export default function SeatMap({
   seats, participants, hotReactions, now, myParticipantId, height = 320,
-  layoutItems = [], onSeatClick, seatDisabled,
+  layoutItems = [], onSeatClick, seatDisabled, selectedSeatId,
 }: {
   seats: VenueSeat[]
   participants: Participant[]
@@ -24,6 +24,10 @@ export default function SeatMap({
   layoutItems?: VenueLayoutItem[]
   onSeatClick?: (seat: VenueSeat, occupant: Participant | undefined) => void
   seatDisabled?: (seat: VenueSeat, occupant: Participant | undefined) => boolean
+  // 아직 서버에 확정되지 않은 가선택 좌석 (ADR-0007 2단계 선택 흐름). 점유자 여부와 무관하게
+  // "내 좌석"과 같은 강조 스타일로 하이라이트만 한다 — 실제 착석 확정은 "선택완료" 버튼을
+  // 눌러야 일어난다.
+  selectedSeatId?: string | null
 }) {
   return (
     <div style={{
@@ -44,15 +48,17 @@ export default function SeatMap({
       {seats.map(seat => {
         const occupant = participants.find(p => p.seat_id === seat.id)
         const isMe = occupant?.id === myParticipantId
+        const isPending = selectedSeatId === seat.id
         const occupantHot = occupant ? isOccupantHot(occupant.id, hotReactions, now) : false
         const disabled = seatDisabled ? seatDisabled(seat, occupant) : false
         const clickable = !!onSeatClick && !disabled
 
         // 착석 여부에 따라 명암을 나눈다 — 빈 좌석(선택 가능)은 밝은 빨간 테두리,
-        // 이미 앉은 좌석은 어둡게 눌러 대비를 준다. 내 좌석은 채워서 확실히 구분.
-        const border = isMe ? 'var(--accent)' : occupant ? 'var(--muted)' : 'var(--accent)'
-        const bg = isMe ? 'var(--accent)' : occupant ? 'var(--card)' : 'transparent'
-        const fg = isMe ? '#fff' : occupant ? 'var(--muted)' : 'var(--accent)'
+        // 이미 앉은 좌석은 어둡게 눌러 대비를 준다. 내 좌석/가선택 좌석은 채워서 확실히 구분.
+        const highlighted = isMe || isPending
+        const border = highlighted ? 'var(--accent)' : occupant ? 'var(--muted)' : 'var(--accent)'
+        const bg = highlighted ? 'var(--accent)' : occupant ? 'var(--card)' : 'transparent'
+        const fg = highlighted ? '#fff' : occupant ? 'var(--muted)' : 'var(--accent)'
 
         return (
           <div
@@ -77,7 +83,7 @@ export default function SeatMap({
               type="button"
               disabled={!clickable}
               onClick={clickable ? () => onSeatClick!(seat, occupant) : undefined}
-              aria-label={`${seat.label}번 좌석${occupant ? ' (사용 중)' : ''}`}
+              aria-label={`${seat.label}번 좌석${occupant ? ' (사용 중)' : isPending ? ' (선택됨)' : ''}`}
               style={{
                 position: 'relative', zIndex: 1,
                 width: 38, height: 38, borderRadius: 999,
