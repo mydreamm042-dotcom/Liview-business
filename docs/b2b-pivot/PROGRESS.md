@@ -225,3 +225,34 @@
   요소는 좌석과 동일한 끝자리 숫자 증가 규칙을 적용하고, 라벨이 없는 요소(빈 이름 네모/선)는
   번호를 붙이지 않고 그대로 복사. ADR-0008 "후속 작업"에 결정 근거 추가 기록.
   tsc/vitest(188)/Playwright(좌석·네모 양쪽 복사 버튼 노출 및 라벨 증가) 검증 완료
+- ✅ PR #11 머지 완료 (`main`) — 자리배치도 미니맵/확대·이동, 좌석 2단계 선택, 복사하기 버튼
+  (좌석+배치 요소) 등 ADR-0007/0008 코드 반영 전체
+- ✅ **데스크톱 Tailwind 유틸리티 클래스 미생성 버그 — 원인 확정 및 수정**
+  (`fix/데스크톱-좌석-크기-표시`): 위에서 발견한 버그의 근본 원인은 저장소에 `postcss.config`
+  파일이 아예 없던 것이었다. Tailwind v4 + Next.js 공식 설정은 `@import "tailwindcss";`(이미
+  `globals.css`에 있음)만으로는 부족하고, `@tailwindcss/postcss`를 PostCSS 플러그인으로
+  등록하는 `postcss.config.mjs`가 반드시 있어야 하는데 이 파일이 처음부터 없어서 Tailwind가
+  빌드 파이프라인에 전혀 연결돼 있지 않았다 — 그래서 `@theme inline{...}` 블록조차 처리되지
+  않고 컴파일된 CSS에 문자 그대로 남아있었다(원래 3.4KB, 유틸리티 클래스 0개). `postcss.config.mjs`
+  추가 후 빌드 결과 CSS가 13.3KB로 늘고 `.max-w-md`/`.flex`/`.px-6` 등 실제 유틸리티 규칙이
+  생성됨을 확인. Playwright로 데스크톱(1440px) 뷰포트에서 `.max-w-md` 요소의
+  `computedMaxWidth`가 `"none"`→`"448px"`로 정상화되고, 운영자 좌석 관리 툴 스크린샷에서
+  좌석·배치요소 비율이 모바일과 동일하게 보이는 것까지 확인. 앱 전체에 영향을 준 설정
+  누락이었던 만큼 이 브랜치 전용 회귀는 없었는지 tsc/vitest(188) 통과 확인
+- ⚠️ **위 수정 직후 새 증상 발견 — 데스크톱 화면 전체가 가운데가 아니라 왼쪽에 붙음**:
+  postcss 설정을 추가해 Tailwind 유틸리티가 실제로 생성되기 시작하자, 이번엔 `layout.tsx`의
+  `max-w-md mx-auto` 래퍼가 폭은 448px로 맞는데 `mx-auto`(가운데 정렬)이 전혀 먹지 않는 새
+  증상이 드러났다(운영자 매장 설정 화면 스크린샷으로 사용자가 재보고). Playwright로
+  `getComputedStyle` 확인 결과 `.mx-auto{margin-inline:auto}` 규칙 자체는 컴파일된 CSS에
+  존재하는데도 실제 적용된 `marginLeft`/`marginRight`가 둘 다 `0px`였다.
+  **근본 원인**: `globals.css`의 `* { margin:0; padding:0; ... }` 초기화 규칙이 어떤
+  `@layer`에도 속하지 않은 "레이어 없는(unlayered)" CSS인 반면, Tailwind의 모든 유틸리티는
+  `@layer utilities` 안에 있다 — CSS Cascade Layers 스펙상 레이어 없는 선언은 명시도나
+  작성 순서와 무관하게 항상 레이어 안 선언을 이긴다. 그래서 `mx-auto`뿐 아니라 `px-6`을
+  포함한 **margin/padding 계열 Tailwind 유틸리티 전부가 이 초기화 규칙에 조용히 무력화되고
+  있었다**(앱 전체에서 이런 클래스를 쓰는 파일 14개 확인) — postcss.config가 없어 Tailwind가
+  아예 안 돌던 동안은 유틸리티 자체가 없어 드러나지 않았을 뿐. 수정: 이 초기화 규칙을
+  `@layer base { ... }`로 감싸 Tailwind의 레이어 순서(`base` < `utilities`)에 정식 편입시킴 —
+  Tailwind 자체 preflight도 동일한 margin/padding 리셋을 이미 `@layer base`에 두고 있어
+  결과적으로 관용적인 형태로 정리됨. Playwright로 1440px 데스크톱에서 `marginLeft`/
+  `marginRight`가 `0px`→`496px`(정중앙)로 정상화됨을 확인, tsc/vitest(188) 재통과 확인

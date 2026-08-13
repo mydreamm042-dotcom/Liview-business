@@ -24,11 +24,18 @@
   --color-foreground: var(--text);
 }
 
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-  margin: 0;
-  padding: 0;
+/* @layer base 안에 둬야 한다 — 레이어 밖(unlayered) CSS는 Tailwind 유틸리티 레이어보다
+   항상 우선한다(명시도/작성 순서와 무관, CSS Cascade Layers 스펙). 레이어 없이 두면 이
+   초기화 규칙의 margin:0/padding:0이 mx-auto·px-6 같은 모든 여백 유틸리티를 항상 이겨서
+   무력화시킨다 — postcss.config 부재로 Tailwind가 아예 안 돌던 동안은 유틸리티 자체가
+   없어서 드러나지 않았던 문제. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 body {
