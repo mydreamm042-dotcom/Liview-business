@@ -112,31 +112,58 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  // 좌석 복제 (ADR-0008). 트리거는 선택 패널의 "복사하기" 버튼 — 캔버스 위 우클릭/롱프레스는
-  // 이미 드래그·이동 제스처가 쓰고 있어서, 편집 액션은 삭제 버튼과 같은 자리에 모아둔다.
-  // 복제본은 원본 바로 옆(+4%)에 놓아 원본을 가리지 않으면서 관계가 보이게 한다.
-  const handleDuplicateSeat = async () => {
-    if (selection?.type !== 'seat' || duplicating) return
-    const source = seats.find(s => s.id === selection.id)
-    if (!source) return
+  // 복제 (ADR-0008). 좌석뿐 아니라 배치 요소(네모/출입문/텍스트/선)도 대상 — 트리거는 선택
+  // 패널의 "복사하기" 버튼 하나로 통일한다. 캔버스 위 우클릭/롱프레스는 이미 드래그·이동
+  // 제스처가 쓰고 있어서, 편집 액션은 삭제 버튼과 같은 자리에 모아둔다.
+  // 복사본은 원본 바로 옆(+4%)에 놓아 원본을 가리지 않으면서 관계가 보이게 한다.
+  const handleDuplicate = async () => {
+    if (!selection || duplicating) return
     setDuplicating(true)
     setActionError('')
     try {
-      const res = await fetch(`/api/venues/${id}/seats`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: nextDuplicateLabel(source.label, seats.map(s => s.label)),
-          position_x: clampPct(source.position_x + 4, 1, 99),
-          position_y: clampPct(source.position_y + 4, 1, 99),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setSeats(prev => [...prev, data.seat])
-      setSelection({ type: 'seat', id: data.seat.id })
+      if (selection.type === 'seat') {
+        const source = seats.find(s => s.id === selection.id)
+        if (!source) return
+        const res = await fetch(`/api/venues/${id}/seats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label: nextDuplicateLabel(source.label, seats.map(s => s.label)),
+            position_x: clampPct(source.position_x + 4, 1, 99),
+            position_y: clampPct(source.position_y + 4, 1, 99),
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setSeats(prev => [...prev, data.seat])
+        setSelection({ type: 'seat', id: data.seat.id })
+      } else {
+        const source = items.find(i => i.id === selection.id)
+        if (!source) return
+        // 라벨이 있는 요소(출입문/텍스트/이름 붙인 네모)만 번호를 올린다 — 빈 라벨은 그대로 복사.
+        const label = source.label
+          ? nextDuplicateLabel(source.label, items.filter(i => i.kind === source.kind).map(i => i.label ?? ''))
+          : source.label
+        const res = await fetch(`/api/venues/${id}/layout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: source.kind,
+            label,
+            position_x: clampPct(source.position_x + 4, 1, 99),
+            position_y: clampPct(source.position_y + 4, 1, 99),
+            width: source.width,
+            height: source.height,
+            rotation: source.rotation,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setItems(prev => [...prev, data.item])
+        setSelection({ type: 'item', id: data.item.id })
+      }
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '좌석 복사에 실패했습니다')
+      setActionError(e instanceof Error ? e.message : '복사에 실패했습니다')
     } finally {
       setDuplicating(false)
     }
@@ -494,12 +521,10 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
                 style={{ flex: 1, padding: '10px 14px', fontSize: 13 }}
               />
             )}
-            {selection.type === 'seat' && (
-              <button className="btn btn-secondary" onClick={handleDuplicateSeat} disabled={duplicating}
-                style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13 }}>
-                {duplicating ? '복사하는 중…' : '복사하기'}
-              </button>
-            )}
+            <button className="btn btn-secondary" onClick={handleDuplicate} disabled={duplicating}
+              style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13 }}>
+              {duplicating ? '복사하는 중…' : '복사하기'}
+            </button>
             <button className="btn btn-secondary" onClick={handleDelete}
               style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13, color: 'var(--accent)' }}>
               삭제
