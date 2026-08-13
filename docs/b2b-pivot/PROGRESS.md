@@ -239,3 +239,20 @@
   `computedMaxWidth`가 `"none"`→`"448px"`로 정상화되고, 운영자 좌석 관리 툴 스크린샷에서
   좌석·배치요소 비율이 모바일과 동일하게 보이는 것까지 확인. 앱 전체에 영향을 준 설정
   누락이었던 만큼 이 브랜치 전용 회귀는 없었는지 tsc/vitest(188) 통과 확인
+- ⚠️ **위 수정 직후 새 증상 발견 — 데스크톱 화면 전체가 가운데가 아니라 왼쪽에 붙음**:
+  postcss 설정을 추가해 Tailwind 유틸리티가 실제로 생성되기 시작하자, 이번엔 `layout.tsx`의
+  `max-w-md mx-auto` 래퍼가 폭은 448px로 맞는데 `mx-auto`(가운데 정렬)이 전혀 먹지 않는 새
+  증상이 드러났다(운영자 매장 설정 화면 스크린샷으로 사용자가 재보고). Playwright로
+  `getComputedStyle` 확인 결과 `.mx-auto{margin-inline:auto}` 규칙 자체는 컴파일된 CSS에
+  존재하는데도 실제 적용된 `marginLeft`/`marginRight`가 둘 다 `0px`였다.
+  **근본 원인**: `globals.css`의 `* { margin:0; padding:0; ... }` 초기화 규칙이 어떤
+  `@layer`에도 속하지 않은 "레이어 없는(unlayered)" CSS인 반면, Tailwind의 모든 유틸리티는
+  `@layer utilities` 안에 있다 — CSS Cascade Layers 스펙상 레이어 없는 선언은 명시도나
+  작성 순서와 무관하게 항상 레이어 안 선언을 이긴다. 그래서 `mx-auto`뿐 아니라 `px-6`을
+  포함한 **margin/padding 계열 Tailwind 유틸리티 전부가 이 초기화 규칙에 조용히 무력화되고
+  있었다**(앱 전체에서 이런 클래스를 쓰는 파일 14개 확인) — postcss.config가 없어 Tailwind가
+  아예 안 돌던 동안은 유틸리티 자체가 없어 드러나지 않았을 뿐. 수정: 이 초기화 규칙을
+  `@layer base { ... }`로 감싸 Tailwind의 레이어 순서(`base` < `utilities`)에 정식 편입시킴 —
+  Tailwind 자체 preflight도 동일한 margin/padding 리셋을 이미 `@layer base`에 두고 있어
+  결과적으로 관용적인 형태로 정리됨. Playwright로 1440px 데스크톱에서 `marginLeft`/
+  `marginRight`가 `0px`→`496px`(정중앙)로 정상화됨을 확인, tsc/vitest(188) 재통과 확인
