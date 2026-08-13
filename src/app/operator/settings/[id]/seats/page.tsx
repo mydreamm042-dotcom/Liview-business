@@ -21,7 +21,7 @@ type Selection = { type: 'seat'; id: string } | { type: 'item'; id: string } | n
 
 // 2026-08-12(ADR-0008): 테이블(table)은 네모(box)와 기능이 겹쳐 폐지, 선(line) 신설.
 const TOOL_LABELS: { kind: LayoutItemKind; label: string; icon: string; defaultLabel: string }[] = [
-  { kind: 'box', label: '네모', icon: '⬜', defaultLabel: '주방' },
+  { kind: 'box', label: '네모', icon: '⬜', defaultLabel: '' },
   { kind: 'door', label: '출입문', icon: '🚪', defaultLabel: '출입문' },
   { kind: 'text', label: '텍스트', icon: 'T', defaultLabel: '안내' },
   { kind: 'line', label: '선', icon: '╱', defaultLabel: '' },
@@ -112,7 +112,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  // 좌석 복제 (ADR-0008). 트리거는 선택 패널의 "복제" 버튼 — 캔버스 위 우클릭/롱프레스는
+  // 좌석 복제 (ADR-0008). 트리거는 선택 패널의 "복사하기" 버튼 — 캔버스 위 우클릭/롱프레스는
   // 이미 드래그·이동 제스처가 쓰고 있어서, 편집 액션은 삭제 버튼과 같은 자리에 모아둔다.
   // 복제본은 원본 바로 옆(+4%)에 놓아 원본을 가리지 않으면서 관계가 보이게 한다.
   const handleDuplicateSeat = async () => {
@@ -136,7 +136,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
       setSeats(prev => [...prev, data.seat])
       setSelection({ type: 'seat', id: data.seat.id })
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '좌석 복제에 실패했습니다')
+      setActionError(e instanceof Error ? e.message : '좌석 복사에 실패했습니다')
     } finally {
       setDuplicating(false)
     }
@@ -497,7 +497,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
             {selection.type === 'seat' && (
               <button className="btn btn-secondary" onClick={handleDuplicateSeat} disabled={duplicating}
                 style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13 }}>
-                {duplicating ? '복제 중…' : '복제'}
+                {duplicating ? '복사하는 중…' : '복사하기'}
               </button>
             )}
             <button className="btn btn-secondary" onClick={handleDelete}
