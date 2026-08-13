@@ -118,7 +118,8 @@ export interface VenueSeat {
 // 자리배치도의 좌석 외 배치 요소 (Seating 도메인 §2.8, Phase 9). 좌석과 달리 참여자가
 // 앉거나 리액션을 남기지 않는 순수 "그림"이라 venue_seats와 테이블을 분리했다.
 // 좌표계는 좌석과 동일한 캔버스 대비 0~100% (position은 중심, width/height는 크기).
-export type LayoutItemKind = 'table' | 'box' | 'door' | 'text'
+// 2026-08-12(ADR-0008): `table`은 `box`와 기능이 겹쳐 폐지되고 `line`이 신설됐다.
+export type LayoutItemKind = 'box' | 'door' | 'text' | 'line'
 
 export interface VenueLayoutItem {
   id: string
@@ -129,6 +130,10 @@ export interface VenueLayoutItem {
   position_y: number
   width: number
   height: number
+  // 회전 각도(도). `line`이 대각선을 그릴 수 있게 하려고 추가됐다 — 축에 나란한 선만 그릴 수
+  // 있으면 얇은 box와 다를 게 없어서, 폐지된 table의 전철을 밟게 된다(ADR-0008 후속 결정).
+  // 다른 종류에도 저장은 되지만 지금 편집 UI는 line에만 회전 핸들을 노출한다.
+  rotation: number
   sort_order: number
   created_at: string
 }
@@ -323,7 +328,10 @@ export interface VenuePublicDetail {
   satisfaction: number
   heart_count: number
   participant_count: number
-  seats: { label: string; occupied: boolean }[]
+  // 2026-08-12(ADR-0008): 집계 숫자 카운트 대신 실제 자리배치도를 그리려고 좌표까지 내려받는다.
+  // 참여자 개인식별 정보는 공개하지 않으므로, 점유 여부만 occupied 플래그로 온다.
+  seats: (VenueSeat & { occupied: boolean })[]
+  layout_items: VenueLayoutItem[]
   hot_timeline: { t: string; count: number }[]
 }
 
