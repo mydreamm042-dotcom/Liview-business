@@ -12,6 +12,8 @@ import BackButton from '@/components/BackButton'
 import ErrorScreen from '@/components/ErrorScreen'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 import InlineMessage from '@/components/InlineMessage'
+import Icon, { IconName } from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 const CANVAS_HEIGHT = 460
 const MINIMAP_WIDTH = 92
@@ -20,11 +22,14 @@ const MINIMAP_WIDTH = 92
 type Selection = { type: 'seat'; id: string } | { type: 'item'; id: string } | null
 
 // 2026-08-12(ADR-0008): 테이블(table)은 네모(box)와 기능이 겹쳐 폐지, 선(line) 신설.
-const TOOL_LABELS: { kind: LayoutItemKind; label: string; icon: string; defaultLabel: string }[] = [
-  { kind: 'box', label: '네모', icon: '⬜', defaultLabel: '' },
-  { kind: 'door', label: '출입문', icon: '🚪', defaultLabel: '출입문' },
-  { kind: 'text', label: '텍스트', icon: 'T', defaultLabel: '안내' },
-  { kind: 'line', label: '선', icon: '╱', defaultLabel: '' },
+// 아이콘은 이모지/글자 대신 Material Symbols로 통일 (ADR-0009). 이전엔 ⬜·🚪는 이모지,
+// 텍스트는 글자 "T", 선은 박스드로잉 문자 "╱"라 네 버튼의 아이콘이 서로 다른 종류였고,
+// 실제 렌더링 크기도 제각각이어서 버튼 폭이 들쭉날쭉했다(유사성·연속성 위반).
+const TOOL_LABELS: { kind: LayoutItemKind; label: string; icon: IconName; defaultLabel: string }[] = [
+  { kind: 'box', label: '네모', icon: 'crop_square', defaultLabel: '' },
+  { kind: 'door', label: '출입문', icon: 'door_front', defaultLabel: '출입문' },
+  { kind: 'text', label: '텍스트', icon: 'text_fields', defaultLabel: '안내' },
+  { kind: 'line', label: '선', icon: 'horizontal_rule', defaultLabel: '' },
 ]
 
 function clampPct(v: number, min = 0, max = 100) {
@@ -365,7 +370,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
             flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 999,
             background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer',
           }}>
-          <span style={{ fontSize: 15 }}>◯</span> 좌석
+          <Icon name="radio_button_unchecked" size={ICON.row} /> 좌석
         </button>
         {TOOL_LABELS.map(t => (
           <button key={t.kind} onClick={() => handleAddItem(t.kind, t.defaultLabel)}
@@ -374,7 +379,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
               background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--text2)',
               fontSize: 13, fontWeight: 700, cursor: 'pointer',
             }}>
-            <span style={{ fontSize: 14 }}>{t.icon}</span> {t.label}
+            <Icon name={t.icon} size={ICON.row} /> {t.label}
           </button>
         ))}
       </div>
@@ -523,11 +528,11 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
             )}
             <button className="btn btn-secondary" onClick={handleDuplicate} disabled={duplicating}
               style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13 }}>
-              {duplicating ? '복사하는 중…' : '복사하기'}
+              {duplicating ? '복사하는 중…' : <><Icon name="content_copy" size={ICON.inline} /> 복사하기</>}
             </button>
             <button className="btn btn-secondary" onClick={handleDelete}
-              style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13, color: 'var(--accent)' }}>
-              삭제
+              style={{ width: 'auto', minHeight: 'auto', padding: '0 16px', fontSize: 13, color: 'var(--accent)', gap: GAP.tight + 2 }}>
+              <Icon name="delete" size={ICON.inline} /> 삭제
             </button>
           </div>
           {selectedItem && selectedItem.kind !== 'line' && (

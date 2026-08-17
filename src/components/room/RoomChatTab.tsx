@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Message, Participant, QnaMessage, VenueSeat } from '@/lib/supabase/types'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { ICON } from '@/lib/design'
 
 type Channel = 'room' | 'external'
 
@@ -171,9 +173,10 @@ export default function RoomChatTab({
           style={{
             width: 54, borderRadius: 999, border: 'none', cursor: 'pointer',
             background: input.trim() ? 'var(--accent)' : 'var(--card2)',
-            color: '#fff', fontSize: 18, opacity: !input.trim() || sending ? 0.45 : 1,
+            color: '#fff', opacity: !input.trim() || sending ? 0.45 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-          ▶
+          <Icon name="send" size={ICON.row} />
         </button>
       </div>
     </div>

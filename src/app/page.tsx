@@ -11,6 +11,8 @@ import PlaceSearchBar from '@/components/PlaceSearchBar'
 import MapBottomTabBar, { MapTab } from '@/components/MapBottomTabBar'
 import QRScanner from '@/components/QRScanner'
 import HotListSheet from '@/components/HotListSheet'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 // 서울시청 기본 좌표 (위치 권한 거부/실패 시 폴백)
 const FALLBACK_CENTER = { lat: 37.5665, lng: 126.978 }
@@ -162,9 +164,12 @@ export default function Home() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 opacity: geoStatus === 'loading' ? 0.5 : 1, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
               }}>
-              {geoStatus === 'loading'
-                ? <span style={{ fontSize: 18 }}>⏳</span>
-                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 3L3 10.5l7.2 2.3L12.5 20 21 3z" fill="var(--accent)" /></svg>}
+              {/* 로딩 중에도 아이콘을 바꾸지 않고 같은 아이콘을 흐리게만 한다 (ADR-0009) —
+                  이전엔 ⏳ 이모지로 갈아끼워서, 누르는 순간 버튼 안 그림이 완전히 다른 것으로
+                  바뀌어 "다른 버튼이 됐나?" 싶은 깜빡임이 생겼다. */}
+              <span style={{ color: 'var(--accent)', display: 'flex', opacity: geoStatus === 'loading' ? 0.4 : 1 }}>
+                <Icon name="my_location" size={22} />
+              </span>
             </button>
           }
         >
@@ -195,7 +200,10 @@ export default function Home() {
           <div onClick={e => e.stopPropagation()}
             style={{ width: '100%', background: 'var(--bg)', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--muted)', margin: '0 auto 12px' }} />
-            <button className="btn btn-ghost" onClick={() => router.push('/create')} style={{ fontSize: 14 }}>🏪 사장님이신가요? 매장 관리</button>
+            <button className="btn btn-ghost" onClick={() => router.push('/create')} style={{ fontSize: 14, gap: GAP.snug }}>
+              <Icon name="storefront" size={ICON.row} />
+              사장님이신가요? 매장 관리
+            </button>
           </div>
         </div>
       )}

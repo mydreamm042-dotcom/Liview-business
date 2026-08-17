@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { getSessionToken } from '@/lib/session'
 import LoadingScreen from '@/components/LoadingScreen'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 interface ClaimedVenue { id: string; name: string }
 
@@ -65,7 +67,13 @@ export default function ClaimVenuePage() {
         </>
       ) : claimed.length > 0 ? (
         <div>
-          <p style={{ fontSize: 14, color: '#10b981', marginBottom: 16 }}>✓ {claimed.length}개 매장을 연결했어요</p>
+          <p style={{
+          fontSize: 14, color: SEMANTIC.success, marginBottom: GAP.loose,
+          display: 'flex', alignItems: 'center', gap: GAP.tight + 2,
+        }}>
+          <Icon name="check_circle" size={ICON.inline} />
+          {claimed.length}개 매장을 연결했어요
+        </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
             {claimed.map(v => (
               <div key={v.id} className="card" style={{ padding: '12px 16px' }}>{v.name}</div>

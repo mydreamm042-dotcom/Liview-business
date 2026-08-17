@@ -5,6 +5,8 @@ import { VenueBranding } from '@/lib/supabase/types'
 import { formatCooldown } from '@/lib/cooldown'
 import StarRow from './StarRow'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { ICON } from '@/lib/design'
 
 const CATEGORY_LABELS: Record<string, string> = {
   pocha: '포차', bar: '바', pub: '펍', wine_bar: '와인바', cafe: '카페', event_hall: '행사장', etc: '기타',
@@ -51,7 +53,7 @@ export default function StarTab({ venue, moodAverage, cooldownMs, onSubmit }: {
       </p>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 18 }}>🏪</span>
+        <span style={{ color: 'var(--muted2)', display: 'flex' }}><Icon name="storefront" size={ICON.row} /></span>
         <span style={{ fontSize: 16, fontWeight: 800 }}>실시간 매장 별점</span>
       </div>
 

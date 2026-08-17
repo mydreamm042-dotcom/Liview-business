@@ -6,6 +6,9 @@ import { getRoomData, getSessionToken, clearRoomData } from '@/lib/session'
 import { createClient } from '@/lib/supabase/client'
 import { Participant, Reaction, Room } from '@/lib/supabase/types'
 import { calcHotIndex } from '@/lib/hotIndex'
+import Icon, { IconName } from '@/components/Icon'
+import MetricCell from '@/components/MetricCell'
+import { GAP, TYPE, ICON, RADIUS, SEMANTIC } from '@/lib/design'
 
 interface ResultData {
   room: Room | null
@@ -67,6 +70,47 @@ function makeHotBuckets(reactions: Reaction[], roomEndedAt: number | null) {
     buckets.push({ label, value: peak })
   }
   return buckets
+}
+
+// 카드 제목 줄. 2026-08-17(ADR-0009) 그루핑 정리: 이 화면의 네 카드가 제목을 각각 다른
+// 색(#ff6b6b/#fbbf24/#f97316/#10b981)으로 칠하고 있었다. 나란히 놓인 형제 섹션인데 제목
+// 색이 전부 다르면 **유사성**이 깨져서 네 개가 서로 무관한 위젯처럼 읽힌다. 색은 작은
+// 아이콘에만 남기고 제목은 전부 같은 본문색으로 통일했다 — 색은 "이 카드가 무엇에 관한
+// 것인지"를 거드는 힌트일 뿐, 제목의 위계를 바꾸는 값이 아니다.
+function CardHeader({ icon, tone, title, description }: {
+  icon: IconName
+  tone: string
+  title: string
+  description?: string
+}) {
+  return (
+    <div style={{ marginBottom: GAP.loose }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: GAP.snug }}>
+        <span style={{ color: tone, display: 'flex' }}><Icon name={icon} size={ICON.row} /></span>
+        <h2 style={{ ...TYPE.body, fontWeight: 800, fontSize: 15 }}>{title}</h2>
+      </div>
+      {description && <p style={{ ...TYPE.caption, marginTop: GAP.tight }}>{description}</p>}
+    </div>
+  )
+}
+
+// 순위 배지. 이전엔 `['🥇','🥈','🥉','4️⃣','5️⃣']`였는데, 1~3위는 메달 그림이고 4~5위는
+// 키캡 숫자라 **같은 척도의 5단계가 두 가지 형태로 쪼개져** 있었다(유사성 위반). 게다가
+// 메달 이모지는 폭이 키캡보다 넓어 이름 열의 시작선이 순위마다 어긋났다(연속성 위반).
+// 전부 같은 크기의 원형 숫자 배지로 통일하고, 1위만 색으로 구분한다.
+function RankBadge({ rank, size = 32 }: { rank: number; size?: number }) {
+  const isTop = rank === 1
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      width: size, height: size, borderRadius: RADIUS.pill,
+      fontSize: size * 0.44, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+      background: isTop ? 'rgba(245,197,24,0.16)' : 'var(--card2)',
+      color: isTop ? SEMANTIC.score : 'var(--muted2)',
+    }}>
+      {rank}
+    </span>
+  )
 }
 
 export default function ResultPage({ params }: { params: Promise<{ code: string }> }) {
@@ -147,7 +191,9 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
     return (
       <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.loose, color: SEMANTIC.score }}>
+            <Icon name="star" size={ICON.hero} />
+          </div>
           <p style={{ color: 'var(--muted2)' }}>결과 불러오는 중...</p>
         </div>
       </main>
@@ -179,28 +225,27 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
     .filter(x => x.participant)
 
   const others = data.participants.filter(p => p.id !== roomData.participantId)
-  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
   const totalHearts = data.reactions.filter(r => r.type === 'heart').length
 
   return (
     <main style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', paddingBottom: 40 }}>
       <div style={{ padding: '52px 20px 24px', textAlign: 'center', background: 'linear-gradient(180deg, rgba(255,107,107,0.08) 0%, transparent 100%)' }} className="animate-fade-in">
-        <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.base, color: 'var(--accent)' }}>
+          <Icon name="celebration" size={56} />
+        </div>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6 }}>{roomData.roomName}</h1>
         <p style={{ fontSize: 14, color: 'var(--muted2)' }}>오늘 모임 결과</p>
       </div>
 
       <div style={{ padding: '0 20px', marginBottom: 20 }} className="animate-fade-in">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          {[
-            { e: '👥', v: data.participants.length, l: '참여자', c: 'var(--text)' },
-            { e: '💖', v: totalHearts, l: '하트', c: '#ff6b6b' },
-            { e: '⭐', v: avgMood !== null ? avgMood.toFixed(1) : '-', l: '평균 만족도', c: '#fbbf24' },
-          ].map(s => (
-            <div key={s.l} className="card" style={{ padding: '14px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, marginBottom: 4 }}>{s.e}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.c }}>{s.v}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted2)' }}>{s.l}</div>
+          {([
+            { icon: 'group', v: data.participants.length, l: '참여자', c: 'var(--text)' },
+            { icon: 'favorite', v: totalHearts, l: '하트', c: SEMANTIC.danger },
+            { icon: 'star', v: avgMood !== null ? avgMood.toFixed(1) : '-', l: '평균 만족도', c: SEMANTIC.score },
+          ] as const).map(s => (
+            <div key={s.l} className="card" style={{ padding: `14px 10px` }}>
+              <MetricCell icon={s.icon} value={s.v} label={s.l} color={s.c} />
             </div>
           ))}
         </div>
@@ -208,31 +253,25 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
 
       <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 20 }}>💖</span>
-            <h2 style={{ fontSize: 15, fontWeight: 800, color: '#ff6b6b' }}>오늘의 하트 Top 3</h2>
-          </div>
+          <CardHeader icon="favorite" tone={SEMANTIC.danger} title="오늘의 하트 Top 3" />
           {heartTop3.length === 0 ? (
             <p style={{ fontSize: 14, textAlign: 'center', padding: '16px 0', color: 'var(--muted2)' }}>아직 하트가 없어요</p>
           ) : heartTop3.map(({ participant: p, count }, i) => (
             <div key={p!.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-              <span style={{ fontSize: 24, width: 32, textAlign: 'center' }}>{medals[i]}</span>
+              <RankBadge rank={i + 1} />
               <p style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>
                 {p!.id === roomData.participantId ? roomData.nickname + ' (나)' : '누군가'}
               </p>
               <div style={{ background: 'rgba(255,107,107,0.12)', padding: '4px 12px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 14 }}>💖</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#ff6b6b' }}>{count}</span>
+                <Icon name="favorite" size={ICON.inline} style={{ color: SEMANTIC.danger }} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: SEMANTIC.danger }}>{count}</span>
               </div>
             </div>
           ))}
         </div>
 
         <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 20 }}>⭐</span>
-            <h2 style={{ fontSize: 15, fontWeight: 800, color: '#fbbf24' }}>시간별 만족도</h2>
-          </div>
+          <CardHeader icon="star" tone={SEMANTIC.score} title="시간별 만족도" />
           {starBuckets.length === 0 ? (
             <p style={{ fontSize: 14, textAlign: 'center', padding: '16px 0', color: 'var(--muted2)' }}>투표 기록이 없어요</p>
           ) : (
@@ -252,10 +291,7 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
         </div>
 
         <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 20 }}>🔥</span>
-            <h2 style={{ fontSize: 15, fontWeight: 800, color: '#f97316' }}>시간별 HOT 지수</h2>
-          </div>
+          <CardHeader icon="local_fire_department" tone="#f97316" title="시간별 HOT 지수" />
           {hotBuckets.length === 0 ? (
             <p style={{ fontSize: 14, textAlign: 'center', padding: '16px 0', color: 'var(--muted2)' }}>HOT 기록이 없어요</p>
           ) : (
@@ -275,11 +311,8 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
         </div>
 
         <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 20 }}>🙋</span>
-            <h2 style={{ fontSize: 15, fontWeight: 800, color: '#10b981' }}>다음에 또 보고 싶은 사람</h2>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 16 }}>익명 투표 · 1명 선택</p>
+          <CardHeader icon="front_hand" tone={SEMANTIC.success} title="다음에 또 보고 싶은 사람"
+            description="익명 투표 · 1명 선택" />
           {others.length === 0 ? (
             <p style={{ fontSize: 14, textAlign: 'center', padding: '16px 0', color: 'var(--muted2)' }}>다른 참여자가 없어요</p>
           ) : others.map(p => {
@@ -296,13 +329,15 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
                   cursor: voted ? 'default' : 'pointer',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👤</div>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted2)' }}>
+                    <Icon name="person" size={ICON.row} />
+                  </div>
                   <span style={{ fontSize: 15, fontWeight: 600 }}>누군가</span>
                 </div>
                 {totalVotes > 0 && voteCount > 0 && (
                   <div style={{ background: 'rgba(16,185,129,0.15)', padding: '4px 10px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 14 }}>🙋</span>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#10b981' }}>{voteCount}</span>
+                    <Icon name="front_hand" size={ICON.inline} style={{ color: SEMANTIC.success }} />
+                    <span style={{ fontSize: 14, fontWeight: 800, color: SEMANTIC.success }}>{voteCount}</span>
                   </div>
                 )}
               </button>
@@ -312,10 +347,13 @@ export default function ResultPage({ params }: { params: Promise<{ code: string 
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
               <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 10 }}>투표 결과</p>
               {seeAgainTop.map(({ participant: p, count }, i) => (
-                <div key={p!.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14 }}>
-                  <span>{medals[i]}</span>
+                <div key={p!.id} style={{ display: 'flex', alignItems: 'center', gap: GAP.snug, padding: '6px 0', fontSize: 14 }}>
+                  <RankBadge rank={i + 1} size={24} />
                   <span style={{ flex: 1 }}>{p!.id === roomData.participantId ? '나' : '누군가'}</span>
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>🙋 {count}</span>
+                  <span style={{ color: SEMANTIC.success, fontWeight: 700, display: 'flex', alignItems: 'center', gap: GAP.tight }}>
+                    <Icon name="front_hand" size={ICON.inline} />
+                    {count}
+                  </span>
                 </div>
               ))}
             </div>

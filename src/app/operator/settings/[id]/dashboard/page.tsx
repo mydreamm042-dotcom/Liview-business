@@ -9,6 +9,8 @@ import BackButton from '@/components/BackButton'
 import LoadingScreen from '@/components/LoadingScreen'
 import ErrorScreen from '@/components/ErrorScreen'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import Icon, { IconName } from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 function fmtShortDate(iso: string) {
   const [, m, d] = iso.split('-')
@@ -62,10 +64,10 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
   const starSeries = dashboard.daily.map(d => ({ date: d.date, value: d.avg_star, events: d.events }))
   const hotSeries = dashboard.daily.map(d => ({ date: d.date, value: d.hot_density, events: d.events }))
 
-  const rankings: { title: string; items: DashboardBestDay[]; valueKey: 'hot_density' | 'avg_star' | 'guest_count'; unit: string; emoji: string }[] = [
-    { title: 'HOT 밀도', items: dashboard.best_by_hot_density, valueKey: 'hot_density', unit: '', emoji: '🔥' },
-    { title: '평균 만족도', items: dashboard.best_by_star, valueKey: 'avg_star', unit: '점', emoji: '⭐' },
-    { title: '참여자 수', items: dashboard.best_by_guests, valueKey: 'guest_count', unit: '명', emoji: '👥' },
+  const rankings: { title: string; items: DashboardBestDay[]; valueKey: 'hot_density' | 'avg_star' | 'guest_count'; unit: string; icon: IconName }[] = [
+    { title: 'HOT 밀도', items: dashboard.best_by_hot_density, valueKey: 'hot_density', unit: '', icon: 'local_fire_department' },
+    { title: '평균 만족도', items: dashboard.best_by_star, valueKey: 'avg_star', unit: '점', icon: 'star' },
+    { title: '참여자 수', items: dashboard.best_by_guests, valueKey: 'guest_count', unit: '명', icon: 'group' },
   ]
 
   return (
@@ -123,7 +125,7 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
 
           <div className="card" style={{ padding: 18, marginBottom: 16 }}>
             <p style={SECTION_TITLE}>평균 만족도 추이</p>
-            <p style={SECTION_SUB}>최근 90일 · 별점(⭐) 평균, 0~5점</p>
+            <p style={SECTION_SUB}>최근 90일 · 별점 평균, 0~5점</p>
             <TrendLine data={starSeries} color="#fbbf24" formatDate={fmtShortDate} formatValue={v => v.toFixed(1)} />
           </div>
 
@@ -145,9 +147,12 @@ export default function OperatorDashboardPage({ params }: { params: Promise<{ id
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', marginBottom: 12 }}>베스트 영업일 (전체 기간)</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {rankings.map(({ title, items, valueKey, unit, emoji }) => (
+            {rankings.map(({ title, items, valueKey, unit, icon }) => (
               <div key={title} className="card" style={{ padding: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>{emoji} {title} Top {items.length || 0}</p>
+                <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', gap: GAP.tight + 2 }}>
+                  <span style={{ color: 'var(--muted2)', display: 'flex' }}><Icon name={icon} size={ICON.inline} /></span>
+                  {title} Top {items.length || 0}
+                </p>
                 {items.length === 0 ? (
                   <p style={{ fontSize: 12, color: 'var(--muted2)' }}>데이터가 아직 없어요</p>
                 ) : (

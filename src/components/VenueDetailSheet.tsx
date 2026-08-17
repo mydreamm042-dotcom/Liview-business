@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Participant, VenuePublicDetail, VenueCategory } from '@/lib/supabase/types'
 import TrendLine from '@/components/TrendLine'
 import SeatMap from '@/components/SeatMap'
+import Icon from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 const CATEGORY_LABELS: Record<string, string> = {
   pocha: '포차', bar: '바', pub: '펍', wine_bar: '와인바', cafe: '카페', event_hall: '행사장', etc: '기타',
@@ -106,8 +108,12 @@ export default function VenueDetailSheet({ venueId, distanceKm, onClose }: {
                   <p style={{ fontSize: 24, fontWeight: 800 }}>{venue.name}</p>
                   {detail.is_open && (
                     <>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>🔥 {Math.round(detail.hot_score * 100)}%</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>⭐ {detail.satisfaction || '-'}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: GAP.tight }}>
+                        <Icon name="local_fire_department" size={ICON.inline} />{Math.round(detail.hot_score * 100)}%
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)', display: 'inline-flex', alignItems: 'center', gap: GAP.tight }}>
+                        <Icon name="star" size={ICON.inline} />{detail.satisfaction || '-'}
+                      </span>
                     </>
                   )}
                 </div>
@@ -128,7 +134,13 @@ export default function VenueDetailSheet({ venueId, distanceKm, onClose }: {
                   </span>
                 )}
                 <button onClick={onClose} aria-label="닫기"
-                  style={{ width: 30, height: 30, borderRadius: 999, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', cursor: 'pointer' }}>✕</button>
+                  style={{
+                    width: 30, height: 30, borderRadius: 999, background: 'var(--card2)',
+                    border: '1px solid var(--border)', color: 'var(--muted2)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                  <Icon name="close" size={ICON.inline} />
+                </button>
               </div>
             </div>
           </div>
@@ -178,12 +190,15 @@ export default function VenueDetailSheet({ venueId, distanceKm, onClose }: {
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button className="btn btn-secondary" disabled={!directionsUrl}
-                onClick={() => directionsUrl && window.open(directionsUrl, '_blank', 'noopener,noreferrer')}>
-                🧭 길찾기
+                onClick={() => directionsUrl && window.open(directionsUrl, '_blank', 'noopener,noreferrer')}
+                style={{ gap: GAP.snug }}>
+                <Icon name="directions" size={ICON.row} />
+                길찾기
               </button>
               <button className="btn btn-primary" onClick={() => router.push(`/v/${venueId}`)} disabled={!withinRadius}
-                style={{ opacity: withinRadius ? 1 : 0.4 }}>
-                🚪 입장하기
+                style={{ opacity: withinRadius ? 1 : 0.4, gap: GAP.snug }}>
+                <Icon name="login" size={ICON.row} />
+                입장하기
               </button>
             </div>
           </div>

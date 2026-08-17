@@ -7,6 +7,8 @@ import { useRoom } from '@/hooks/useRoom'
 import SeatMap from '@/components/SeatMap'
 import LoadingScreen from '@/components/LoadingScreen'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 // 전용 좌석 선택 화면 (ADR-0001). QR 입장 직후 참여자는 방 화면으로 바로 가지 않고 이 화면을
 // 먼저 거친다. 좌석 탭 = 가선택(하이라이트), 화면 하단 "선택완료" 버튼 = 확정의 2단계 흐름이다
@@ -87,7 +89,10 @@ export default function SeatSelectPage({ params }: { params: Promise<{ code: str
           background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span>👁 손님 화면 미리보기 중 (실제로는 운영자)</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: GAP.tight + 2 }}>
+            <Icon name="visibility" size={ICON.inline} />
+            손님 화면 미리보기 중 (실제로는 운영자)
+          </span>
           <button onClick={() => { clearPreviewAsGuest(); window.location.reload() }}
             style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer' }}>
             미리보기 종료

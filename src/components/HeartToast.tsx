@@ -1,8 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Icon, { IconName } from '@/components/Icon'
+import { ICON } from '@/lib/design'
 
-interface Toast { id: string; message: string; emoji: string; color: string }
+// 2026-08-17(ADR-0009): emoji: string -> icon: IconName. 이전엔 호출부가 아무 이모지나
+// 넘길 수 있어서 토스트마다 아이콘 크기·색이 제각각이었다. IconName으로 좁히면 타입이
+// 목록을 강제하고, 색은 아래에서 토스트 색과 항상 일치시킨다(유사성).
+interface Toast { id: string; message: string; icon: IconName; color: string }
 
 let addToastFn: ((toast: Omit<Toast, 'id'>) => void) | null = null
 
@@ -26,7 +31,7 @@ export default function HeartToast() {
     <div style={{ position: 'fixed', bottom: 120, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '0 24px', zIndex: 30, pointerEvents: 'none' }}>
       {toasts.map(t => (
         <div key={t.id} className="animate-fade-in" style={{ background: 'rgba(20,20,32,0.95)', border: `1px solid ${t.color}40`, borderRadius: 16, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, backdropFilter: 'blur(12px)', boxShadow: `0 8px 24px ${t.color}30` }}>
-          <span style={{ fontSize: 24 }}>{t.emoji}</span>
+          <span style={{ color: t.color, display: 'flex' }}><Icon name={t.icon} size={ICON.row} /></span>
           <span style={{ fontSize: 14, fontWeight: 700, color: t.color }}>{t.message}</span>
         </div>
       ))}

@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useGeolocation } from '@/hooks/useKakaoMap'
 import { DiscoverVenue, VenueCategory } from '@/lib/supabase/types'
 import BackButton from '@/components/BackButton'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 const CATEGORIES: { value: VenueCategory | 'all'; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -81,7 +83,10 @@ function DiscoverContent() {
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 32 }}>
       <BackButton onClick={() => router.back()} marginBottom={20} />
 
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>🔥 실시간 핫한 가게</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4, display: 'flex', alignItems: 'center', gap: GAP.snug }}>
+          <span style={{ color: 'var(--accent)', display: 'flex' }}><Icon name="local_fire_department" size={ICON.card} /></span>
+          실시간 핫한 가게
+        </h1>
       <p style={{ color: 'var(--muted2)', fontSize: 13, marginBottom: 20 }}>
         지금 이 순간 분위기가 좋은 매장이에요. 입장은 실제 방문 후 QR로만 가능해요.
       </p>
@@ -135,8 +140,12 @@ function DiscoverContent() {
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>🔥 {Math.round(v.hot_score * 100)}</p>
-                <p style={{ fontSize: 11, color: 'var(--muted2)' }}>⭐ {v.satisfaction ? v.satisfaction.toFixed(1) : '-'}</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: GAP.tight, justifyContent: 'flex-end' }}>
+                  <Icon name="local_fire_department" size={ICON.inline} />{Math.round(v.hot_score * 100)}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--muted2)', display: 'flex', alignItems: 'center', gap: GAP.tight, justifyContent: 'flex-end', marginTop: 2 }}>
+                  <Icon name="star" size={13} />{v.satisfaction ? v.satisfaction.toFixed(1) : '-'}
+                </p>
               </div>
             </div>
 

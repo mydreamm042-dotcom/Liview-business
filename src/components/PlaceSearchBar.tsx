@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { KakaoPlace } from '@/hooks/useKakaoMap'
+import Icon from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 // 실제 장소 검색바 (Discovery 도메인, BUSINESS_RULES.md §2.7 "실제 장소 검색"). 카카오
 // services 라이브러리의 키워드 검색을 쓴다. SDK가 준비된(sdkReady) 뒤에만 검색이 동작한다.
@@ -51,7 +53,7 @@ export default function PlaceSearchBar({
         background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 14,
         boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
       }}>
-        <span style={{ fontSize: 16 }}>🔍</span>
+        <span style={{ color: 'var(--muted2)', display: 'flex' }}><Icon name="search" size={ICON.inline} /></span>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -62,7 +64,9 @@ export default function PlaceSearchBar({
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setOpen(false) }} aria-label="지우기"
-            style={{ background: 'none', border: 'none', color: 'var(--muted2)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+            style={{ background: 'none', border: 'none', color: 'var(--muted2)', cursor: 'pointer', display: 'flex', padding: 0 }}>
+            <Icon name="close" size={ICON.inline} />
+          </button>
         )}
       </div>
 

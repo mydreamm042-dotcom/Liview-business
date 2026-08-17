@@ -183,8 +183,8 @@ export default function BusinessHoursPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
-        {saveError && <InlineMessage type="error" style={{ textAlign: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
-        {savedAt && <InlineMessage type="success" style={{ textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</InlineMessage>}
+        {saveError && <InlineMessage type="error" style={{ justifyContent: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
+        {savedAt && <InlineMessage type="success" style={{ justifyContent: 'center', marginBottom: 8 }}>저장되었습니다</InlineMessage>}
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}
           style={{ fontSize: 16, opacity: saving ? 0.5 : 1 }}>
           {saving ? '저장 중...' : '영업시간 저장'}

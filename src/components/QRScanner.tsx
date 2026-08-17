@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import jsQR from 'jsqr'
+import Icon from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 // QR 스캔 카메라 (Phase 9, 홈 지도 "입장"). 후면 카메라를 열어 매장 고정 QR을 인식한다.
 // QR에는 매장 랜딩 URL(.../v/[venueId])이 담겨 있고, 인식되면 그 경로로 이동한다 —
@@ -109,7 +111,13 @@ export default function QRScanner({ onClose }: { onClose: () => void }) {
       <div style={{ position: 'relative', zIndex: 2, padding: '20px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>매장 QR 스캔</p>
         <button onClick={() => { stop(); onClose() }} aria-label="닫기"
-          style={{ width: 36, height: 36, borderRadius: 999, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          style={{
+            width: 36, height: 36, borderRadius: 999, background: 'rgba(0,0,0,0.5)',
+            border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <Icon name="close" size={ICON.row} />
+        </button>
       </div>
 
       {/* 하단 안내/에러 */}

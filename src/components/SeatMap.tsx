@@ -6,6 +6,7 @@ import { isOccupantHot } from '@/lib/seatDisplay'
 import LayoutItemShape from './LayoutItemShape'
 import CanvasMiniMap, { miniMapHeight } from './CanvasMiniMap'
 import { useZoomPan } from '@/hooks/useZoomPan'
+import Icon from './Icon'
 
 // 좌석 고정 렌더링 크기 (ADR-0008 "좌석 고정 크기"). 캔버스 너비 대비 %이며, 개별 좌석마다
 // 다르게 지정하는 기능은 없다. 값 근거는 `VARIABLES.md` 참고 — 폐지된 `table` 장식 요소의
@@ -115,11 +116,14 @@ export default function SeatMap({
               >
                 {/* HOT 불꽃 — 좌석 원 뒤에 겹쳐 타오르는 느낌을 준다 */}
                 {occupantHot && (
+                  // 이모지 🔥를 Icon으로 교체 (ADR-0009). 좌석 원의 크기에 비례해야 해서
+                  // size를 seatPx에서 계산한다 — 이모지였을 땐 fontSize로 줬는데, 이모지는
+                  // 글리프가 자기 박스를 다 채우지 않아 실제로 보이는 크기가 기기마다 달랐다.
                   <span style={{
-                    position: 'absolute', left: '50%', top: -seatPx * 0.38, transform: 'translateX(-50%)',
-                    fontSize: seatPx * 0.7, lineHeight: 1, pointerEvents: 'none', zIndex: 0,
+                    position: 'absolute', left: '50%', top: -seatPx * 0.34, transform: 'translateX(-50%)',
+                    lineHeight: 1, pointerEvents: 'none', zIndex: 0, color: '#f97316',
                   }} className="fire-pulse">
-                    🔥
+                    <Icon name="local_fire_department" size={seatPx * 0.62} />
                   </span>
                 )}
                 <button
