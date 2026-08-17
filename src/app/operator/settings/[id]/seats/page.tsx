@@ -402,7 +402,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
           <div ref={contentRef} style={{ position: 'relative', width: contentWidth || '100%', height: contentHeight || '100%' }}>
             {seats.length === 0 && items.length === 0 && (
               <p style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--muted2)' }}>
-                위 버튼으로 좌석과 테이블을 추가해보세요
+                위 버튼으로 좌석과 네모를 추가해보세요
               </p>
             )}
 
