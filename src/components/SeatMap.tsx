@@ -6,12 +6,8 @@ import { isOccupantHot } from '@/lib/seatDisplay'
 import LayoutItemShape from './LayoutItemShape'
 import CanvasMiniMap, { miniMapHeight } from './CanvasMiniMap'
 import { useZoomPan } from '@/hooks/useZoomPan'
+import { seatSizePx } from '@/lib/seatSize'
 
-// 좌석 고정 렌더링 크기 (ADR-0008 "좌석 고정 크기"). 캔버스 너비 대비 %이며, 개별 좌석마다
-// 다르게 지정하는 기능은 없다. 값 근거는 `VARIABLES.md` 참고 — 폐지된 `table` 장식 요소의
-// 짧은 변(16%)의 절반이다. **px가 아니라 %인 게 중요하다**: 확대(zoom)하면 콘텐츠가 실제로
-// 커지는 구조라, px로 두면 배경 배치 요소만 커지고 좌석은 그대로 남아 배치가 어긋난다.
-export const SEAT_SIZE_PCT = 8
 const MINIMAP_WIDTH = 104
 
 // 자리배치 캔버스 (Phase 9 리디자인 + ADR-0007/0008). 좌석을 "번호 원형"으로 그린다 — 선택
@@ -54,9 +50,9 @@ export default function SeatMap({
 }) {
   const { setContainer, handlers, contentWidth, contentHeight, viewport, zoom, isPanning, wasDragged } = useZoomPan()
 
-  // 좌석 지름과 글자 크기를 확대 배율이 반영된 실제 콘텐츠 크기에서 뽑아, 확대해도 배경 배치
-  // 요소와 같은 비율로 커지게 한다.
-  const seatPx = contentWidth > 0 ? (contentWidth * SEAT_SIZE_PCT) / 100 : 32
+  // 확대 배율이 반영된 실제 콘텐츠 크기를 넘겨, 확대해도 배경 배치 요소와 같은 비율로 커지게
+  // 한다. 크기 자체는 이 매장 네모들의 평균에서 파생된다 (ADR-0008).
+  const seatPx = seatSizePx(layoutItems, contentWidth, contentHeight)
   const isEmpty = seats.length === 0 && layoutItems.length === 0
 
   return (
