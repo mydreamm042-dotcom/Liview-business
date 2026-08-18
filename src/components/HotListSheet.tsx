@@ -3,6 +3,8 @@
 import { useMemo, useRef, useState, ReactNode, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { DiscoverVenue, VenueCategory } from '@/lib/supabase/types'
 import DraggableBottomSheet from '@/components/DraggableBottomSheet'
+import Icon from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 const CATEGORIES: { value: VenueCategory | 'all'; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -92,7 +94,10 @@ export default function HotListSheet({
       bottomOffset={bottomOffset}
       header={
         <div>
-          <p style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>🔥 실시간 핫한 가게</p>
+          <p style={{ fontSize: 22, fontWeight: 800, marginBottom: 12, display: 'flex', alignItems: 'center', gap: GAP.snug }}>
+            <span style={{ color: 'var(--accent)', display: 'flex' }}><Icon name="local_fire_department" size={22} /></span>
+            실시간 핫한 가게
+          </p>
 
           {/* 카테고리 필터 — 자체 드래그 스크롤(CategoryScroller 참고) */}
           <CategoryScroller>
@@ -147,8 +152,12 @@ export default function HotListSheet({
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>🔥 {Math.round(v.hot_score * 100)}</p>
-                      <p style={{ fontSize: 11, color: 'var(--muted2)' }}>⭐ {v.satisfaction ? v.satisfaction.toFixed(1) : '-'}</p>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: GAP.tight, justifyContent: 'flex-end' }}>
+                        <Icon name="local_fire_department" size={ICON.inline} />{Math.round(v.hot_score * 100)}
+                      </p>
+                      <p style={{ fontSize: 11, color: 'var(--muted2)', display: 'flex', alignItems: 'center', gap: GAP.tight, justifyContent: 'flex-end', marginTop: 2 }}>
+                        <Icon name="star" size={13} />{v.satisfaction ? v.satisfaction.toFixed(1) : '-'}
+                      </p>
                     </div>
                   </div>
                 </button>

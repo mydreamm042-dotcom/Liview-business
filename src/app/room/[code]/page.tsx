@@ -20,9 +20,19 @@ import { simulateHotTaps, hotIndexAt } from '@/lib/hotIndex'
 import { WARNING_COOLDOWN_MS, STAR_COOLDOWN_MS } from '@/lib/cooldown'
 import { fmtSeatElapsed } from '@/lib/seatDisplay'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 function fmtCd(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
+}
+
+// 상단바의 아이콘 버튼(설정/나가기). 둘이 나란히 있는데 각각 인라인으로 같은 값을 적고
+// 있었다 — 같은 그룹의 두 버튼은 한 글자도 달라선 안 되므로 상수로 뽑았다 (ADR-0009).
+const HEADER_BTN: React.CSSProperties = {
+  width: 36, height: 36, borderRadius: 10, background: 'var(--card2)',
+  border: '1px solid var(--border)', color: 'var(--muted2)', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
 }
 
 const LONG_PRESS_MS = 2000
@@ -383,12 +393,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     newOnes.forEach(latest => {
       if (latest.receiver_id !== roomData?.participantId) return
       if (latest.type === 'heart') {
-        showToast({ emoji: '💖', message: '누군가 하트를 보냈어요!', color: '#ff6b6b' })
+        showToast({ icon: 'favorite', message: '누군가 하트를 보냈어요!', color: SEMANTIC.danger })
         if (latest.sender_participant_id) {
           checkMutualOnReceive(latest.sender_participant_id)
         }
       } else if (latest.type === 'warning') {
-        showToast({ emoji: '🤫', message: '잠깐, 오늘 좀 과한 것 같아요', color: '#f59e0b' })
+        showToast({ icon: 'volume_off', message: '잠깐, 오늘 좀 과한 것 같아요', color: SEMANTIC.warning })
       }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -549,7 +559,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span>👁 손님 화면 미리보기 중 (실제로는 운영자)</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: GAP.tight + 2 }}>
+            <Icon name="visibility" size={ICON.inline} />
+            손님 화면 미리보기 중 (실제로는 운영자)
+          </span>
           <button onClick={() => { clearPreviewAsGuest(); window.location.reload() }}
             style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer' }}>
             미리보기 종료
@@ -568,13 +581,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         <div style={{ display: 'flex', gap: 8 }}>
           {effectiveIsHost && state.venue && (
             <button onClick={() => router.push(`/operator/settings/${state.venue!.id}`)} aria-label="매장 설정"
-              style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 15, cursor: 'pointer' }}>
-              ⚙
+              style={{ ...HEADER_BTN }}>
+              <Icon name="settings" size={ICON.row} />
             </button>
           )}
           <button onClick={handleLeave} aria-label="나가기"
-            style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 15, cursor: 'pointer' }}>
-            ⏻
+            style={{ ...HEADER_BTN }}>
+            <Icon name="login" size={ICON.row} style={{ transform: 'rotate(180deg)' }} />
           </button>
         </div>
       </header>
@@ -650,8 +663,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             {/* 하트/자제 시그널 (Mutual Match 도메인) — 디자인의 4탭에는 없지만 살아있는
                 기능이라 매장 탭 안에 유지한다. */}
             <div style={{ padding: '4px 20px 0' }}>
-              <button className="btn btn-secondary" onClick={() => setShowModal(true)} style={{ fontSize: 15 }}>
-                ✨ 지금 표현하기
+              <button className="btn btn-secondary" onClick={() => setShowModal(true)}
+                style={{ fontSize: 15, gap: GAP.snug }}>
+                <Icon name="stars" size={ICON.row} />
+                지금 표현하기
               </button>
             </div>
 
@@ -740,11 +755,16 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                           </p>
                           {p.is_operator && <span className="badge" style={{ background: 'rgba(225,6,0,0.18)', color: 'var(--accent)', fontSize: 10 }}>HOST</span>}
                         </div>
-                        {isMe && warnCount >= 1 && <p style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>🤫 자제 시그널 {warnCount}개 받음</p>}
+                        {isMe && warnCount >= 1 && (
+                          <p style={{ fontSize: 11, color: SEMANTIC.warning, marginTop: 2, display: 'flex', alignItems: 'center', gap: GAP.tight }}>
+                            <Icon name="volume_off" size={13} />
+                            자제 시그널 {warnCount}개 받음
+                          </p>
+                        )}
                       </div>
                       {heartCount > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(225,6,0,0.14)', padding: '4px 10px', borderRadius: 20 }}>
-                          <span style={{ fontSize: 14 }}>💖</span>
+                          <Icon name="favorite" size={ICON.inline} style={{ color: 'var(--accent)' }} />
                           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{heartCount}</span>
                         </div>
                       )}
@@ -795,7 +815,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
         {tab === 'staff' && (
           <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <p style={{ fontSize: 34, marginBottom: 12 }}>🙂</p>
+            <p style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.base, color: 'var(--muted)' }}>
+              <Icon name="front_hand" size={ICON.hero} />
+            </p>
             <p style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>친절 직원 투표</p>
             <p style={{ fontSize: 13, color: 'var(--muted2)', lineHeight: 1.6 }}>
               지금은 방을 나갈 때 투표할 수 있어요.<br />이 화면은 곧 준비될 예정이에요.
@@ -808,8 +830,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       {hotFloaters.map(id => (
         <span key={id} className="animate-float-up" style={{
           position: 'fixed', bottom: 140, left: '50%', transform: 'translateX(-50%)',
-          fontSize: 34, pointerEvents: 'none', zIndex: 45,
-        }}>🔥</span>
+          pointerEvents: 'none', zIndex: 45, color: 'var(--accent)',
+        }}><Icon name="local_fire_department" size={34} /></span>
       ))}
 
       <RoomTabBar active={tab} onSelect={setTab} chatBadge={unreadCount} />
@@ -819,10 +841,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', padding: '0 32px' }}>
           <div className="card animate-fade-in" onClick={e => e.stopPropagation()}
             style={{ width: '100%', maxWidth: 320, padding: '32px 24px', textAlign: 'center', border: '1.5px solid rgba(225,6,0,0.5)' }}>
-            <div style={{ fontSize: 52, marginBottom: 12 }}>💗</div>
-            <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>통했어요!</p>
-            <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24, lineHeight: 1.6 }}>서로의 마음이<br />연결되었어요 💕</p>
-            <button onClick={() => setMutualBanner(false)} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48 }}>확인 ✕</button>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.base, color: 'var(--accent)' }}>
+              <Icon name="favorite" size={52} />
+            </div>
+            <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)', marginBottom: GAP.snug }}>통했어요!</p>
+            <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: GAP.section, lineHeight: 1.6 }}>서로의 마음이<br />연결되었어요</p>
+            <button onClick={() => setMutualBanner(false)} className="btn btn-primary" style={{ fontSize: 15, minHeight: 48 }}>확인</button>
           </div>
         </div>
       )}
@@ -833,8 +857,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
       {warningVisible && (
         <div style={{ position: 'fixed', bottom: warningBottom, left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 40px)', maxWidth: 408, zIndex: 40, background: 'rgba(245,158,11,0.15)', border: '1.5px solid rgba(245,158,11,0.5)', borderRadius: 16, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 24 }}>🤫</span>
-          <p style={{ fontSize: 14, fontWeight: 700, color: '#f59e0b', flex: 1 }}>우리 5분만 쉬어요</p>
+          <span style={{ color: SEMANTIC.warning, display: 'flex' }}><Icon name="volume_off" size={ICON.card} /></span>
+          <p style={{ fontSize: 14, fontWeight: 700, color: SEMANTIC.warning, flex: 1 }}>우리 5분만 쉬어요</p>
           <span style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fmtCd(warningCountdown)}</span>
         </div>
       )}
@@ -847,7 +871,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       {pendingAlert && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', padding: '0 32px' }}>
           <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 340, padding: '28px 22px', textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📢</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.base, color: 'var(--accent)' }}>
+              <Icon name="campaign" size={40} />
+            </div>
             <p style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 8, letterSpacing: '0.05em' }}>매장에서 보낸 메시지</p>
             <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, lineHeight: 1.6 }}>{pendingAlert.message}</p>
             {alertError && <InlineMessage type="error" style={{ marginBottom: 12 }}>{alertError}</InlineMessage>}

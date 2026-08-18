@@ -62,6 +62,35 @@
 | 미니맵 너비 | 손님 화면 104px · 운영자 편집 화면 92px (`MINIMAP_WIDTH`, 높이는 캔버스와 같은 비율로 자동 계산) | `src/components/SeatMap.tsx`, `src/app/operator/settings/[id]/seats/page.tsx` |
 | 좌석 복제 시 위치 오프셋 | 원본 대비 +4%, +4% — 원본을 가리지 않으면서 관계가 보이는 거리 | `src/app/operator/settings/[id]/seats/page.tsx` |
 
+## 디자인 토큰 (2026-08-17, ADR-0009)
+
+인라인 스타일이 주된 표현 수단이라 토큰도 CSS 변수가 아니라 TS 객체로 둔다 — **색만** 예외로
+`globals.css`의 CSS 변수가 원천이다(두 곳에 쓰지 않기 위해). 전부 `src/lib/design.ts`.
+
+| 이름 | 값 | 비고 |
+|------|-----|------|
+| `GAP` (간격) | tight 4 · snug 8 · base 12 · loose 16 · **section 24** · region 40 | **핵심 규칙: 그룹 안은 tight~snug, 그룹 사이는 section 이상** — 사이 간격이 안 간격의 2배 이상이어야 덩어리가 눈에 끊긴다(근접성). 이전엔 4~28이 전부 쓰여 이 비율이 우연에 맡겨져 있었다 |
+| `TYPE` (타이포) | title 26/800 · heading 16/800 · eyebrow 11/800(자간 .08em) · body 14/600 · caption 12/500 · metric 22/800 | 역할별로 하나씩만. 같은 역할의 글자가 11·12·13·14px로 제각각이던 것을 정리(유사성) |
+| `ICON` (아이콘 크기) | inline 16 · row 20 · card 28 · hero 48 | 이전엔 13~64px가 흩어져 있어 같은 줄의 글자와 시각적 무게가 항목마다 달랐다 |
+| `SURFACE` (전경-배경 층) | page `--bg` < area `--bg2` < group `--card` < item `--card2` | 이 순서로만 쌓는다. 이전엔 card/card2가 순서 없이 섞여 "무엇이 무엇 위인지"가 화면마다 뒤집혔다 |
+| `RADIUS` | item 12 · group 16 · card 20 · pill 999 | |
+| `SEMANTIC` (의미색) | success `#10b981` · warning `#f59e0b` · danger `#ff6b6b` · score `#f5c518` | 화면마다 다른 hex로 적던 것(#10b981/#0f9e6e, #f59e0b/#fbbf24 등)을 하나로. `score`는 별점 노랑 — `StarRow`가 쓰던 값 |
+| 버튼 아이콘 간격 | `.btn { gap: 6px }` | 호출부마다 정하면 버튼마다 달라지므로 CSS에서 한 번에 |
+| 404 폴백 대기 시간 | 1,200ms 후 `/`로 `replace` | `src/app/not-found.tsx`. 즉시 이동하면 흰 화면만 스쳐서 손님이 "아무 일도 안 일어났다"고 느낀다 |
+
+## 아이콘 (2026-08-17, ADR-0009)
+
+이모지는 **전면 금지**다. 아이콘은 `src/components/Icon.tsx`의 `Icon` 컴포넌트만 쓴다.
+
+| 항목 | 값 |
+|------|-----|
+| 출처 | Google Material Symbols **Rounded, weight 400** — npm `@material-symbols/svg-400@0.46.0`의 `rounded/<이름>.svg` |
+| 이름 규칙 | Google 카탈로그 이름 그대로(`local_fire_department`, `volume_off` 등). 새 아이콘은 fonts.google.com/icons에서 이름을 찾아 같은 패키지에서 path를 복사 |
+| 심는 방식 | 인라인 SVG path (웹폰트 아님 — 폰트 로딩 중 리거처 원문이 노출되는 구간을 피하려고) |
+| 현재 개수 | 46개 |
+| 색 | `currentColor` — 부모의 `color`를 따른다 |
+| viewBox | `0 -960 960 960` (Material Symbols 좌표계 규약, 원본 path를 손대지 않기 위해 유지) |
+
 ## 기타
 
 | 이름 | 값 | 위치 |

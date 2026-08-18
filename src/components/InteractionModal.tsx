@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Participant, Reaction } from '@/lib/supabase/types'
 import { WARNING_COOLDOWN_MS, STAR_COOLDOWN_MS, formatCooldown } from '@/lib/cooldown'
+import Icon, { IconName } from './Icon'
+import { GAP, TYPE, ICON, RADIUS, SURFACE, SEMANTIC } from '@/lib/design'
 
 interface Props {
   participants: Participant[]
@@ -14,7 +16,68 @@ interface Props {
 
 type Mode = 'select' | 'heart' | 'warning' | 'star'
 
-const MOOD_LABELS = ['', '😴 좀 쳐지네요', '😐 평범한 편', '😊 괜찮아요', '😄 꽤 좋아요!', '🔥 완전 핫해요!!']
+// 1~5점의 기분 라벨과 아이콘. 2026-08-17(ADR-0009): 라벨 앞에 붙어 있던 이모지
+// (😴😐😊😄🔥)를 Material Symbols의 sentiment 5단계로 교체했다. 이모지 다섯 개는 서로
+// 계열이 다른 그림(자는 얼굴 / 무표정 / 웃음 / 큰웃음 / 불꽃)이라 "같은 척도의 5단계"로
+// 읽히지 않았다 — sentiment 세트는 같은 얼굴이 표정만 바뀌는 한 계열이라 순서가 눈에 보인다.
+const MOODS: { label: string; icon: IconName }[] = [
+  { label: '', icon: 'sentiment_neutral' }, // 0점(미선택) — 실제로 렌더링되지 않는다
+  { label: '좀 쳐지네요', icon: 'sentiment_very_dissatisfied' },
+  { label: '평범한 편', icon: 'sentiment_dissatisfied' },
+  { label: '괜찮아요', icon: 'sentiment_neutral' },
+  { label: '꽤 좋아요!', icon: 'sentiment_satisfied' },
+  { label: '완전 핫해요!!', icon: 'sentiment_very_satisfied' },
+]
+
+// 세 가지 표현 방식. 색/아이콘/문구를 한 곳에 모아, 이 값들이 화면 여러 곳(카드·헤더·버튼)에서
+// 항상 같은 조합으로 쓰이게 한다 — 같은 행동이 화면마다 다른 색으로 보이면 유사성이 깨진다.
+const ACTIONS = {
+  heart: {
+    icon: 'favorite' as IconName, label: '호감 표현', desc: '익명으로 호감표시!',
+    color: SEMANTIC.danger, rgb: '255,107,107', gradient: 'linear-gradient(135deg,#ff6b6b,#ee4444)',
+  },
+  warning: {
+    icon: 'volume_off' as IconName, label: '자제 시그널', desc: '5분마다 익명으로 전달',
+    color: SEMANTIC.warning, rgb: '245,158,11', gradient: 'linear-gradient(135deg,#f59e0b,#d97706)',
+  },
+  // 2026-08-17(ADR-0009): 별점은 보라(#7c5cbf 계열)였는데, 팔레트를 모노시그널(블랙+레드)로
+  // 옮길 때 `--purple-light`만 레드로 리매핑되고 하드코딩된 rgb '124,92,191'는 그대로 남아
+  // **테두리·배경은 보라인데 아이콘만 빨강**인 상태였다. 별은 앱 전체에서 노랑(`StarRow`의
+  // #f5c518)으로 그려지므로 여기도 같은 노랑으로 맞춘다 — 같은 대상은 화면이 달라도 같은 색.
+  star: {
+    icon: 'star' as IconName, label: '만족도 별점', desc: '지금 이 자리, 몇 점짜리?',
+    color: SEMANTIC.score, rgb: '245,197,24', gradient: 'linear-gradient(135deg,#f5c518,#d9a406)',
+  },
+} as const
+
+// 뒤로 가기 — 세 하위 화면이 똑같이 쓴다. 글자 "←"를 Icon으로 바꾸면서 공통으로 뽑았다.
+function BackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        background: 'none', border: 'none', color: 'var(--muted2)', cursor: 'pointer',
+        marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center',
+        gap: GAP.tight + 2, ...TYPE.body, padding: 0,
+      }}>
+      <Icon name="arrow_back" size={ICON.inline} />
+      뒤로
+    </button>
+  )
+}
+
+// 쿨타임 안내. 이전엔 "⏱" 이모지 + 주황 글씨였는데, 두 화면에서 여백 값이 달라(marginTop:-12
+// 같은 보정이 들어가 있었다) 같은 안내가 다르게 보였다. 하나로 묶어 항상 같게 만든다.
+function CooldownNotice({ ms }: { ms: number }) {
+  return (
+    <p style={{
+      display: 'flex', alignItems: 'center', gap: GAP.tight + 2,
+      ...TYPE.body, fontWeight: 700, color: SEMANTIC.warning, marginBottom: 20,
+    }}>
+      <Icon name="schedule" size={ICON.inline} />
+      {formatCooldown(ms)} 후에 다시 보낼 수 있어요
+    </p>
+  )
+}
 
 export default function InteractionModal({ participants, reactions, myParticipantId, onSend, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('select')
@@ -64,9 +127,9 @@ export default function InteractionModal({ participants, reactions, myParticipan
       } else {
         const msgs: Record<Mode, string> = {
           select: '',
-          heart: '💖 하트를 보냈어요!',
-          warning: '🤫 조용히 전달했어요',
-          star: `⭐ ${starValue}점 투표 완료!`,
+          heart: '하트를 보냈어요!',
+          warning: '조용히 전달했어요',
+          star: `${starValue}점 투표 완료!`,
         }
         setResult({ success: true, message: msgs[mode] })
       }
@@ -76,106 +139,171 @@ export default function InteractionModal({ participants, reactions, myParticipan
   if (result) {
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px', background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)' }}>
-        <div className="card animate-bounce-in" style={{ width: '100%', padding: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 64, marginBottom: 16 }}>{result.success ? '✨' : '😅'}</div>
-          <p style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>{result.message}</p>
+        <div className="card animate-bounce-in" style={{
+          width: '100%', padding: 32, textAlign: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: GAP.loose,
+        }}>
+          {/* 성공/실패를 이모지(✨/😅) 대신 의미 아이콘 + 의미색으로 표현한다 — 이모지는
+              성공인지 실패인지가 그림 해석에 달려 있었지만, 체크/경고는 색과 형태 둘 다로
+              말한다. */}
+          <span style={{ color: result.success ? SEMANTIC.success : SEMANTIC.danger, display: 'flex' }}>
+            <Icon name={result.success ? 'check_circle' : 'error'} size={ICON.hero} />
+          </span>
+          <p style={{ ...TYPE.heading, fontSize: 20 }}>{result.message}</p>
           <button className="btn btn-primary" onClick={onClose}>확인</button>
         </div>
       </div>
     )
   }
 
+  const action = mode !== 'select' ? ACTIONS[mode] : null
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(16px)' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '56px 24px 24px', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
-          <div>
-            <h2 style={{ fontSize: 26, fontWeight: 800 }}>지금 표현해볼까요?</h2>
-          </div>
-          <button onClick={onClose} style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted2)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>✕</button>
+          <h2 style={TYPE.title}>지금 표현해볼까요?</h2>
+          <button onClick={onClose} aria-label="닫기"
+            style={{
+              width: 40, height: 40, borderRadius: RADIUS.item, background: SURFACE.group,
+              border: '1px solid var(--border)', color: 'var(--muted2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+            }}>
+            <Icon name="close" size={ICON.row} />
+          </button>
         </div>
 
         {mode === 'select' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { m: 'heart' as Mode, emoji: '💖', label: '호감 표현', desc: '익명으로 호감표시!', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)', border: 'rgba(255,107,107,0.25)' },
-              { m: 'warning' as Mode, emoji: '🤫', label: '자제 시그널', desc: '5분마다 익명으로 전달', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)' },
-              { m: 'star' as Mode, emoji: '⭐', label: '만족도 별점', desc: '지금 이 자리, 몇 점짜리?', color: 'var(--purple-light)', bg: 'rgba(124,92,191,0.1)', border: 'rgba(124,92,191,0.25)' },
-            ].map(({ m, emoji, label, desc, color, bg, border }) => (
-              <button key={m} onClick={() => setMode(m)}
-                style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 20px', borderRadius: 18, background: bg, border: `1.5px solid ${border}`, cursor: 'pointer', textAlign: 'left' }}>
-                <span style={{ fontSize: 36 }}>{emoji}</span>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color, marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted2)' }}>{desc}</div>
-                </div>
-              </button>
-            ))}
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: GAP.base }}>
+            {(['heart', 'warning', 'star'] as const).map(m => {
+              const a = ACTIONS[m]
+              return (
+                <button key={m} onClick={() => setMode(m)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: GAP.loose, padding: `18px ${GAP.loose + 4}px`,
+                    borderRadius: 18, background: `rgba(${a.rgb},0.1)`, border: `1.5px solid rgba(${a.rgb},0.25)`,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}>
+                  {/* 아이콘을 같은 크기의 원 안에 넣는다 — 이모지 시절엔 글리프마다 실제 폭이
+                      달라 세 카드의 글자 시작선이 어긋났다(연속성 위반). */}
+                  <span style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    width: 48, height: 48, borderRadius: RADIUS.pill,
+                    background: `rgba(${a.rgb},0.16)`, color: a.color,
+                  }}>
+                    <Icon name={a.icon} size={ICON.card} />
+                  </span>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: a.color, marginBottom: 3 }}>{a.label}</div>
+                    <div style={TYPE.caption}>{a.desc}</div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
 
-        {(mode === 'heart' || mode === 'warning') && (
+        {(mode === 'heart' || mode === 'warning') && action && (
           <div className="animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <button onClick={() => { setMode('select'); setSelectedId(null) }}
-              style={{ background: 'none', border: 'none', color: 'var(--muted2)', fontSize: 14, cursor: 'pointer', marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>← 뒤로</button>
-            <p style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>
-              {mode === 'heart' ? '💖 하트 보낼 사람' : '🤫 시그널 보낼 사람'}
+            <BackLink onClick={() => { setMode('select'); setSelectedId(null) }} />
+            <p style={{
+              ...TYPE.heading, fontSize: 20, marginBottom: GAP.tight,
+              display: 'flex', alignItems: 'center', gap: GAP.snug,
+            }}>
+              <span style={{ color: action.color, display: 'flex' }}><Icon name={action.icon} size={ICON.row} /></span>
+              {mode === 'heart' ? '하트 보낼 사람' : '시그널 보낼 사람'}
             </p>
-            <p style={{ fontSize: 13, color: 'var(--muted2)', marginBottom: 20 }}>
+            <p style={{ ...TYPE.caption, marginBottom: 20 }}>
               {mode === 'heart' ? '익명으로 몰래 호감을 표시해요' : '자제 시그널은 익명으로 5분 마다 보낼 수 있어요'}
             </p>
-            {mode === 'warning' && warningCooldownMs > 0 && (
-              <p style={{ fontSize: 13, color: '#f59e0b', marginTop: -12, marginBottom: 20, fontWeight: 700 }}>
-                ⏱ {formatCooldown(warningCooldownMs)} 후에 다시 보낼 수 있어요
-              </p>
-            )}
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 8 }}>
+            {mode === 'warning' && warningCooldownMs > 0 && <CooldownNotice ms={warningCooldownMs} />}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: GAP.snug, paddingBottom: GAP.snug }}>
               {others.length === 0 ? (
                 <p style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 0' }}>아직 다른 참여자가 없어요</p>
               ) : others.map(p => {
                 const sel = selectedId === p.id
-                const ac = mode === 'heart' ? '#ff6b6b' : '#f59e0b'
                 return (
                   <button key={p.id} onClick={() => setSelectedId(p.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 16, background: sel ? `rgba(${mode === 'heart' ? '255,107,107' : '245,158,11'},0.12)` : 'var(--card)', border: `1.5px solid ${sel ? ac : 'var(--border)'}`, cursor: 'pointer' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text2)' }}>{p.nickname[0] ?? '?'}</div>
-                    <span style={{ flex: 1, textAlign: 'left', fontSize: 15, fontWeight: 600, color: sel ? ac : 'var(--text)' }}>{p.nickname}</span>
-                    {sel && <span style={{ fontSize: 20 }}>{mode === 'heart' ? '💖' : '🤫'}</span>}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: GAP.base, padding: `14px ${GAP.loose}px`,
+                      borderRadius: RADIUS.group,
+                      background: sel ? `rgba(${action.rgb},0.12)` : SURFACE.group,
+                      border: `1.5px solid ${sel ? action.color : 'var(--border)'}`, cursor: 'pointer',
+                    }}>
+                    <div style={{ width: 40, height: 40, borderRadius: RADIUS.item, background: SURFACE.item, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text2)' }}>{p.nickname[0] ?? '?'}</div>
+                    <span style={{ flex: 1, textAlign: 'left', fontSize: 15, fontWeight: 600, color: sel ? action.color : 'var(--text)' }}>{p.nickname}</span>
+                    {sel && <span style={{ color: action.color, display: 'flex' }}><Icon name={action.icon} size={ICON.row} /></span>}
                   </button>
                 )
               })}
             </div>
             <button className="btn" onClick={handleSend} disabled={!selectedId || sending || (mode === 'warning' && warningCooldownMs > 0)}
-              style={{ marginTop: 16, fontSize: 17, background: selectedId ? (mode === 'heart' ? 'linear-gradient(135deg,#ff6b6b,#ee4444)' : 'linear-gradient(135deg,#f59e0b,#d97706)') : 'var(--card)', color: '#fff', boxShadow: selectedId ? `0 8px 24px rgba(${mode === 'heart' ? '255,107,107' : '245,158,11'},0.4)` : 'none', opacity: (!selectedId || (mode === 'warning' && warningCooldownMs > 0)) ? 0.4 : 1 }}>
-              {sending ? '전송 중...' : mode === 'heart' ? '💖 하트 보내기' : '🤫 시그널 보내기'}
+              style={{
+                marginTop: GAP.loose, fontSize: 17, gap: GAP.snug,
+                background: selectedId ? action.gradient : SURFACE.group, color: '#fff',
+                boxShadow: selectedId ? `0 8px 24px rgba(${action.rgb},0.4)` : 'none',
+                opacity: (!selectedId || (mode === 'warning' && warningCooldownMs > 0)) ? 0.4 : 1,
+              }}>
+              {sending ? '전송 중...' : (
+                <>
+                  <Icon name={action.icon} size={ICON.row} />
+                  {mode === 'heart' ? '하트 보내기' : '시그널 보내기'}
+                </>
+              )}
             </button>
           </div>
         )}
 
-        {mode === 'star' && (
+        {mode === 'star' && action && (
           <div className="animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <button onClick={() => { setMode('select'); setStarValue(0) }}
-              style={{ background: 'none', border: 'none', color: 'var(--muted2)', fontSize: 14, cursor: 'pointer', marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>← 뒤로</button>
-            <p style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>⭐ 지금 만족도 몇 점?</p>
-            <p style={{ fontSize: 13, color: 'var(--muted2)', marginBottom: starCooldownMs > 0 ? 4 : 40 }}>전체 평균이 실시간으로 업데이트돼요</p>
-            {starCooldownMs > 0 && (
-              <p style={{ fontSize: 13, color: '#f59e0b', marginBottom: 36, fontWeight: 700 }}>
-                ⏱ {formatCooldown(starCooldownMs)} 후에 다시 투표할 수 있어요
-              </p>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
-              {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={() => setStarValue(n)}
-                  style={{ fontSize: 48, background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.15s', transform: starValue >= n ? 'scale(1.25)' : 'scale(1)', filter: starValue >= n ? 'brightness(1) drop-shadow(0 0 8px rgba(251,191,36,0.6))' : 'brightness(0.25)' }}>⭐</button>
+            <BackLink onClick={() => { setMode('select'); setStarValue(0) }} />
+            <p style={{
+              ...TYPE.heading, fontSize: 20, marginBottom: GAP.tight + 2,
+              display: 'flex', alignItems: 'center', gap: GAP.snug,
+            }}>
+              <span style={{ color: SEMANTIC.score, display: 'flex' }}><Icon name="star" size={ICON.row} /></span>
+              지금 만족도 몇 점?
+            </p>
+            <p style={{ ...TYPE.caption, marginBottom: starCooldownMs > 0 ? GAP.tight : 40 }}>전체 평균이 실시간으로 업데이트돼요</p>
+            {starCooldownMs > 0 && <CooldownNotice ms={starCooldownMs} />}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: GAP.base, marginBottom: 20 }}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} onClick={() => setStarValue(n)} aria-label={`${n}점`}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    transition: 'all 0.15s', transform: starValue >= n ? 'scale(1.18)' : 'scale(1)',
+                    // 이모지 시절엔 brightness 필터로 껐다 켰다 했는데(⭐를 어둡게 눌러서
+                    // "안 고른 별"을 표현), 이제 색을 직접 줄 수 있어 의미가 분명해졌다.
+                    color: starValue >= n ? SEMANTIC.score : 'var(--card2)',
+                    filter: starValue >= n ? 'drop-shadow(0 0 8px rgba(245,197,24,0.5))' : 'none',
+                  }}>
+                  <Icon name="star" size={44} />
+                </button>
               ))}
             </div>
             {starValue > 0 && (
-              <p style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#fbbf24', marginBottom: 32 }}>{MOOD_LABELS[starValue]}</p>
+              <p style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: GAP.snug,
+                fontSize: 16, fontWeight: 700, color: SEMANTIC.score, marginBottom: 32,
+              }}>
+                <Icon name={MOODS[starValue].icon} size={ICON.row} />
+                {MOODS[starValue].label}
+              </p>
             )}
             <div style={{ flex: 1 }} />
             <button className="btn" onClick={handleSend} disabled={starValue === 0 || sending || starCooldownMs > 0}
-              style={{ fontSize: 17, background: starValue > 0 ? 'linear-gradient(135deg,#7c5cbf,#6d28d9)' : 'var(--card)', color: '#fff', boxShadow: starValue > 0 ? '0 8px 24px rgba(124,92,191,0.4)' : 'none', opacity: (starValue === 0 || starCooldownMs > 0) ? 0.4 : 1 }}>
-              {sending ? '투표 중...' : `⭐ ${starValue > 0 ? starValue + '점' : '?점'} 투표하기`}
+              style={{
+                fontSize: 17, gap: GAP.snug,
+                background: starValue > 0 ? action.gradient : SURFACE.group, color: '#fff',
+                boxShadow: starValue > 0 ? `0 8px 24px rgba(${action.rgb},0.4)` : 'none',
+                opacity: (starValue === 0 || starCooldownMs > 0) ? 0.4 : 1,
+              }}>
+              {sending ? '투표 중...' : (
+                <>
+                  <Icon name="star" size={ICON.row} />
+                  {starValue > 0 ? `${starValue}점` : '?점'} 투표하기
+                </>
+              )}
             </button>
           </div>
         )}

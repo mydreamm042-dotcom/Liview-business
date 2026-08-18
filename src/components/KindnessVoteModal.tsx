@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import Icon from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 interface Candidate { staff_id: string; name: string }
 
@@ -20,7 +22,7 @@ export default function KindnessVoteModal({ candidates, onSubmit, submitting }: 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(16px)' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '56px 24px 24px', overflow: 'hidden' }}>
-        <p style={{ fontSize: 13, color: 'var(--purple-light)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>나가기 전에</p>
+        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>나가기 전에</p>
         <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>오늘 누가 제일 친절했나요?</h2>
         <p style={{ fontSize: 13, color: 'var(--muted2)', marginBottom: 24 }}>1명만 고를 수 있어요 (스킵해도 괜찮아요)</p>
 
@@ -31,14 +33,16 @@ export default function KindnessVoteModal({ candidates, onSubmit, submitting }: 
               <button key={c.staff_id} onClick={() => setSelectedId(c.staff_id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 16,
-                  background: sel ? 'rgba(124,92,191,0.12)' : 'var(--card)',
-                  border: `1.5px solid ${sel ? 'var(--purple-light)' : 'var(--border)'}`, cursor: 'pointer',
+                  // 팔레트 이관 잔재 정리 (ADR-0009): 배경은 보라 rgb, 테두리는 레드로
+                  // 리매핑된 --purple-light라 서로 안 맞았다. 강조는 accent(레드)로 통일.
+                  background: sel ? 'rgba(225,6,0,0.12)' : 'var(--card)',
+                  border: `1.5px solid ${sel ? 'var(--accent)' : 'var(--border)'}`, cursor: 'pointer',
                 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text2)' }}>
                   {c.name[0] ?? '?'}
                 </div>
-                <span style={{ flex: 1, textAlign: 'left', fontSize: 15, fontWeight: 600, color: sel ? 'var(--purple-light)' : 'var(--text)' }}>{c.name}</span>
-                {sel && <span style={{ fontSize: 20 }}>👍</span>}
+                <span style={{ flex: 1, textAlign: 'left', fontSize: 15, fontWeight: 600, color: sel ? 'var(--accent)' : 'var(--text)' }}>{c.name}</span>
+                {sel && <span style={{ color: 'var(--accent)', display: 'flex' }}><Icon name="thumb_up" size={ICON.row} /></span>}
               </button>
             )
           })}

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { getSessionToken, storeRoomData } from '@/lib/session'
 import { VenueCategory } from '@/lib/supabase/types'
 import LoadingScreen from '@/components/LoadingScreen'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 const RANDOM_NICKNAMES = [
   '소주1번', '안취했어', '오늘만산다', '고삐풀림', '날못막아',
@@ -130,7 +132,7 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
           <img src={venue.logo_url} alt="" style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'cover' }} />
         ) : (
           <div style={{ width: 48, height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff', background: accent }}>
-            {venue.name[0] ?? '🏪'}
+            {venue.name[0] ?? <Icon name="storefront" size={ICON.row} />}
           </div>
         )}
         <div>
@@ -141,14 +143,31 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
 
       {/* 위치 확인 상태 — 반경 검사(BUSINESS_RULES.md §2.2)를 위해 필요하다는 것을 안내 */}
       <div className="card-sm" style={{ padding: '12px 14px', marginBottom: 20 }}>
-        {locationState === 'requesting' && <p style={{ fontSize: 13, color: 'var(--muted2)' }}>📍 위치 확인 중...</p>}
-        {locationState === 'granted' && <p style={{ fontSize: 13, color: '#10b981' }}>📍 위치 확인 완료 — 매장 근처에 있어야 입장할 수 있어요</p>}
-        {locationState === 'denied' && (
-          <div>
-            <p style={{ fontSize: 13, color: '#ff6b6b', marginBottom: 8 }}>📍 위치 권한이 필요해요. 매장 방문 확인을 위해 꼭 필요합니다</p>
-            <button className="btn btn-secondary" onClick={requestLocation} style={{ fontSize: 13, minHeight: 40 }}>다시 시도</button>
-          </div>
-        )}
+        {/* 세 상태가 각각 다른 마크업으로 적혀 있었는데, 같은 자리에서 색만 바뀌는
+            한 가지 안내이므로 구조를 하나로 합쳤다 (ADR-0009, 유사성). */}
+        {(() => {
+          const STATES = {
+            requesting: { color: 'var(--muted2)', text: '위치 확인 중...' },
+            granted: { color: SEMANTIC.success, text: '위치 확인 완료 — 매장 근처에 있어야 입장할 수 있어요' },
+            denied: { color: SEMANTIC.danger, text: '위치 권한이 필요해요. 매장 방문 확인을 위해 꼭 필요합니다' },
+          } as const
+          const s = STATES[locationState as keyof typeof STATES]
+          if (!s) return null
+          return (
+            <div>
+              <p style={{
+                fontSize: 13, color: s.color, display: 'flex', alignItems: 'flex-start', gap: GAP.tight + 2,
+                marginBottom: locationState === 'denied' ? GAP.snug : 0,
+              }}>
+                <Icon name="location_on" size={ICON.inline} style={{ marginTop: 1 }} />
+                <span>{s.text}</span>
+              </p>
+              {locationState === 'denied' && (
+                <button className="btn btn-secondary" onClick={requestLocation} style={{ fontSize: 13, minHeight: 40 }}>다시 시도</button>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 10 }}>별명을 정해보세요!</label>
@@ -167,7 +186,10 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
         onClick={() => setNickname(randomNickname())}
         style={{ marginTop: 10, width: '100%', padding: '10px', borderRadius: 12, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
       >
-        🎲 다른 별명 추첨하기
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: GAP.tight + 2 }}>
+          <Icon name="casino" size={ICON.inline} />
+          다른 별명 추첨하기
+        </span>
       </button>
 
       {passwordRequired && (
@@ -191,7 +213,7 @@ export default function VenueLandingPage({ params }: { params: Promise<{ id: str
       <button className="btn btn-primary" onClick={handleJoin}
         disabled={loading || !nickname.trim() || locationState !== 'granted' || (passwordRequired && !password.trim())}
         style={{ marginTop: 20, opacity: loading || !nickname.trim() || locationState !== 'granted' || (passwordRequired && !password.trim()) ? 0.4 : 1, fontSize: 17 }}>
-        {loading ? '입장 중...' : '🚀 입장하기'}
+        {loading ? '입장 중...' : <><Icon name="login" size={ICON.row} /> 입장하기</>}
       </button>
     </main>
   )

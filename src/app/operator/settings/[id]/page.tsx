@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { getSessionToken, storeRoomData } from '@/lib/session'
+import { geocodeAddress } from '@/hooks/useKakaoMap'
 import { Venue, VenueCategory } from '@/lib/supabase/types'
 import BackButton from '@/components/BackButton'
 import LoadingScreen from '@/components/LoadingScreen'
@@ -11,6 +12,10 @@ import ErrorScreen from '@/components/ErrorScreen'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 import Toggle from '@/components/Toggle'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { NavRow, NavRowGroup } from '@/components/NavRow'
+import SectionGroup from '@/components/SectionGroup'
+import { GAP, TYPE, ICON, RADIUS, SEMANTIC } from '@/lib/design'
 
 interface Session {
   id: string
@@ -41,6 +46,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [saveError, setSaveError] = useState('')
+  const [geocodeWarning, setGeocodeWarning] = useState('')
 
   // 편집 필드 — 매장 이름(name)은 편집 대상이 아니다 (BUSINESS_RULES.md §2.2 "매장명 변경
   // 금지" — 등록 후 고정, 향후 매장 실재 검증의 판정 근거가 된다). 세션(오늘 영업) 이름은
@@ -193,31 +199,53 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
 
   const handleSave = async () => {
     setSaveError('')
+    setGeocodeWarning('')
     if (passwordEnabled && !password.trim()) {
       setSaveError('입장 비밀번호를 켰다면 비밀번호를 입력해주세요')
       return
     }
     setSaving(true)
     try {
+      const trimmedAddress = address.trim()
+      const payload: Record<string, unknown> = {
+        category,
+        address: trimmedAddress || null,
+        logo_url: logoUrl.trim() || null,
+        hero_image_url: heroUrl.trim() || null,
+        description: description.trim() || null,
+        primary_color: primaryColor,
+        naver_review_url: naverUrl.trim() || null,
+        google_review_url: googleUrl.trim() || null,
+        kakao_review_url: kakaoUrl.trim() || null,
+        join_password_enabled: passwordEnabled,
+        join_password: passwordEnabled ? password.trim() : null,
+      }
+
+      // 주소를 지도 위치(위경도)로 자동 변환해 함께 저장한다 — 위경도가 등록된 매장만
+      // 지도 대상이기 때문(BUSINESS_RULES.md §2.6). 주소를 지우면 위치도 같이 비우고,
+      // 지오코딩에 실패하면(주소가 애매한 경우 등) 기존 위치는 건드리지 않은 채 경고만
+      // 보여준다 — 위치를 못 찾았다고 나머지 설정 저장까지 막을 이유는 없다.
+      if (!trimmedAddress) {
+        payload.latitude = null
+        payload.longitude = null
+      } else {
+        const coords = await geocodeAddress(trimmedAddress)
+        if (coords) {
+          payload.latitude = coords.lat
+          payload.longitude = coords.lng
+        } else {
+          setGeocodeWarning('주소로 지도 위치를 찾지 못했어요. 더 구체적으로 입력해보세요 — 나머지 설정은 저장됐어요')
+        }
+      }
+
       const res = await fetch(`/api/venues/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category,
-          address: address.trim() || null,
-          logo_url: logoUrl.trim() || null,
-          hero_image_url: heroUrl.trim() || null,
-          description: description.trim() || null,
-          primary_color: primaryColor,
-          naver_review_url: naverUrl.trim() || null,
-          google_review_url: googleUrl.trim() || null,
-          kakao_review_url: kakaoUrl.trim() || null,
-          join_password_enabled: passwordEnabled,
-          join_password: passwordEnabled ? password.trim() : null,
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setVenue(data.venue)
       setSavedAt(Date.now())
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : '저장에 실패했습니다')
@@ -234,8 +262,11 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
     return <LoadingScreen />
   }
 
-  const label = { fontSize: 12, fontWeight: 700 as const, color: 'var(--muted2)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }
-  const section = { marginBottom: 24 }
+  // 폼 라벨/필드 간격을 토큰으로 통일 (ADR-0009). 라벨과 입력칸은 한 덩어리라 GAP.snug로
+  // 붙이고, 필드와 필드 사이는 GAP.loose로 띄운다 — 이전엔 둘 다 8/24로 잡혀 있어서 "라벨이
+  // 어느 입력칸의 것인지"가 애매했다(근접성).
+  const label = { ...TYPE.eyebrow, display: 'block' as const, marginBottom: GAP.snug }
+  const field = { marginBottom: GAP.loose }
   const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
   const venueJoinUrl = `${appUrl}/v/${id}`
   const isOpen = session?.status === 'active'
@@ -261,7 +292,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           <img src={logoUrl} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />
         ) : (
           <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', background: primaryColor }}>
-            {venue.name[0] ?? '🏪'}
+            {venue.name[0] ?? <Icon name="storefront" size={ICON.row} />}
           </div>
         )}
         <div>
@@ -273,19 +304,20 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       {/* 영업시간 미설정 안내 — Phase 5.5: 자동 마감의 유일한 판단 근거라 설정 전엔
           영업 시작 자체가 API에서도 막힌다. 여기서 미리 안내하고 바로 이동시킨다. */}
       {hoursConfigured === false && (
-        <button className="card" onClick={() => router.push(`/operator/settings/${id}/hours`)}
-          style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', textAlign: 'left', width: '100%', border: '1.5px solid rgba(245,158,11,0.4)' }}>
-          <span style={{ fontSize: 20 }}>⏰</span>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>영업시간을 먼저 설정해주세요</p>
-            <p style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>영업 시작을 하려면 요일별 영업시간이 필요해요</p>
-          </div>
-          <span style={{ color: '#f59e0b' }}>→</span>
-        </button>
+        <div style={{
+          border: `1.5px solid ${SEMANTIC.warning}66`, borderRadius: RADIUS.group,
+          marginBottom: GAP.loose, overflow: 'hidden',
+        }}>
+          <NavRow icon="schedule" tone={SEMANTIC.warning}
+            title="영업시간을 먼저 설정해주세요"
+            description="영업 시작을 하려면 요일별 영업시간이 필요해요"
+            onClick={() => router.push(`/operator/settings/${id}/hours`)} />
+        </div>
       )}
 
       {/* 영업 시작/종료 — 방을 매번 새로 만들지 않고, 등록된 매장에서 오늘 세션만 여닫는다 */}
-      <div className="card" style={{ padding: 18, marginBottom: 24 }}>
+      <SectionGroup title="오늘 영업">
+      <div className="card" style={{ padding: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <p style={{ fontSize: 14, fontWeight: 800 }}>영업 상태</p>
           <span style={{
@@ -308,12 +340,14 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
                 className="btn btn-secondary"
                 onClick={handleSaveRoomName}
                 disabled={roomNameSaving || !roomNameInput.trim() || roomNameInput.trim() === session?.name}
-                style={{ minHeight: 'auto', padding: '0 14px', opacity: roomNameSaving || !roomNameInput.trim() || roomNameInput.trim() === session?.name ? 0.5 : 1 }}>
+                // .btn에 width:100%가 있어서 flex 행 안에서 이 버튼이 입력칸을 밀어내고
+                // 있었다 (ADR-0009에서 발견) — width:auto + flexShrink:0으로 고정한다.
+                style={{ minHeight: 'auto', padding: '0 14px', width: 'auto', flexShrink: 0, opacity: roomNameSaving || !roomNameInput.trim() || roomNameInput.trim() === session?.name ? 0.5 : 1 }}>
                 {roomNameSaving ? '저장 중...' : '변경'}
               </button>
             </div>
             {roomNameError && <p style={{ fontSize: 11, color: '#ff6b6b', marginTop: 6 }}>{roomNameError}</p>}
-            {roomNameSavedAt && <p style={{ fontSize: 11, color: '#10b981', marginTop: 6 }}>✓ 변경되었습니다</p>}
+            {roomNameSavedAt && <InlineMessage type="success" fontSize={11} style={{ marginTop: 6 }}>변경되었습니다</InlineMessage>}
           </div>
         )}
         {sessionError && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>{sessionError}</p>}
@@ -330,68 +364,51 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
               className="btn btn-secondary"
               onClick={handleEnterRoom}
               disabled={enteringRoom}
-              style={{ flex: 1, opacity: enteringRoom ? 0.5 : 1, fontSize: 15 }}>
-              {enteringRoom ? '입장 중...' : '👁️ 방 화면 보기'}
+              style={{ flex: 1, opacity: enteringRoom ? 0.5 : 1, fontSize: 15, gap: GAP.tight + 2 }}>
+              {enteringRoom ? '입장 중...' : <><Icon name="visibility" size={ICON.row} /> 방 화면 보기</>}
             </button>
           )}
         </div>
       </div>
+      </SectionGroup>
 
-      {/* 요일별 영업시간 (Phase 5.5) */}
-      <button className="card" onClick={() => router.push(`/operator/settings/${id}/hours`)}
-        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-        <div>
-          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>⏰ 영업시간 설정</p>
-          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>요일별 영업시간, 24시간/정기휴무, 라스트오더</p>
-        </div>
-        <span style={{ color: 'var(--muted2)' }}>→</span>
-      </button>
-
-      {/* 좌석 배치 (Seating 도메인) — 손님 케어(경고 메시지/좌석 이동)는 방 화면으로 이동함 */}
-      <button className="card" onClick={() => router.push(`/operator/settings/${id}/seats`)}
-        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-        <div>
-          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>좌석 관리</p>
-          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>드래그로 매장 구조에 맞게 좌석 배치</p>
-        </div>
-        <span style={{ color: 'var(--muted2)' }}>→</span>
-      </button>
-
-      {/* 직원 명부 (Staff 도메인, §2.4) — 교대 시작/종료는 방 화면에서 처리한다 */}
-      <button className="card" onClick={() => router.push(`/operator/settings/${id}/staff`)}
-        style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-        <div>
-          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>👤 직원 명부</p>
-          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>직원 추가/삭제 — 교대는 방 화면에서 처리해요</p>
-        </div>
-        <span style={{ color: 'var(--muted2)' }}>→</span>
-      </button>
-
-      {/* 운영자 대시보드 (Operator Analytics 도메인, §2.10 "Phase 5") */}
-      <button className="card" onClick={() => router.push(`/operator/settings/${id}/dashboard`)}
-        style={{ padding: 18, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-        <div>
-          <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>📊 운영 리포트</p>
-          <p style={{ fontSize: 12, color: 'var(--muted2)' }}>지난 영업일 추이, 베스트 데이, 재방문 손님</p>
-        </div>
-        <span style={{ color: 'var(--muted2)' }}>→</span>
-      </button>
+      {/* 다른 화면으로 가는 메뉴 4개 — 이전엔 각각 독립 카드로 16px 떨어져 떠 있어서, 위의
+          "영업 상태"(여기서 조작하는 카드)와 시각적으로 구분되지 않았다. 하나의 공동 영역 안에
+          구분선으로만 나눠 "이건 메뉴 목록"으로 읽히게 했다 (ADR-0009). */}
+      <SectionGroup title="매장 관리">
+        <NavRowGroup>
+          <NavRow icon="schedule" title="영업시간 설정"
+            description="요일별 영업시간, 24시간/정기휴무, 라스트오더"
+            onClick={() => router.push(`/operator/settings/${id}/hours`)} />
+          <NavRow icon="crop_square" title="좌석 관리"
+            description="드래그로 매장 구조에 맞게 좌석 배치"
+            onClick={() => router.push(`/operator/settings/${id}/seats`)} />
+          <NavRow icon="person" title="직원 명부"
+            description="직원 추가/삭제 — 교대는 방 화면에서 처리해요"
+            onClick={() => router.push(`/operator/settings/${id}/staff`)} />
+          <NavRow icon="bar_chart" title="운영 리포트"
+            description="지난 영업일 추이, 베스트 데이, 재방문 손님"
+            onClick={() => router.push(`/operator/settings/${id}/dashboard`)} />
+        </NavRowGroup>
+      </SectionGroup>
 
       {/* 고정 QR — 한 번 등록하면 바뀌지 않음. 방 코드는 별도로 노출하지 않는다
           (BUSINESS_RULES.md §2.2, Discovery 도메인과 동일하게 코드/QR 절대 미표시 원칙) */}
-      <div className="card" style={{ padding: 18, marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <SectionGroup title="손님 입장" description="QR과 비밀번호는 함께 작동해요 — QR이 유출돼도 비밀번호로 막을 수 있어요">
+      <div className="card" style={{ padding: 18, marginBottom: GAP.base, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 4, alignSelf: 'flex-start' }}>매장 고정 QR</p>
         <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 16, alignSelf: 'flex-start' }}>출력해서 매장에 붙여두세요. 이 QR은 바뀌지 않아요</p>
         <div style={{ padding: 16, borderRadius: 20, background: '#fff', marginBottom: 12 }}>
           <QRCodeSVG value={venueJoinUrl} size={160} />
         </div>
         <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(venueJoinUrl)} style={{ fontSize: 14 }}>
-          🔗 링크 복사하기
+          <Icon name="link" size={ICON.row} /> 링크 복사하기
         </button>
       </div>
 
-      {/* 입장 비밀번호 — 고정 QR이 촬영/유출돼도 매장 밖에서 남용하기 어렵게 하는 장치 */}
-      <div className="card" style={{ padding: 18, marginBottom: 24 }}>
+      {/* 입장 비밀번호 — 고정 QR이 촬영/유출돼도 매장 밖에서 남용하기 어렵게 하는 장치.
+          QR과 한 그룹에 둔다 — 둘은 "손님이 들어오는 문"이라는 하나의 주제다(공동 영역). */}
+      <div className="card" style={{ padding: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <p style={{ fontSize: 14, fontWeight: 800 }}>입장 비밀번호</p>
           <Toggle checked={passwordEnabled} onChange={setPasswordEnabled} ariaLabel="입장 비밀번호 사용" />
@@ -403,18 +420,21 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
           <input className="input" value={password} onChange={e => setPassword(e.target.value)} maxLength={30} placeholder="오늘의 입장 비밀번호" />
         )}
       </div>
+      </SectionGroup>
 
-      <div style={{ height: 1, background: 'var(--border)', margin: '0 0 24px' }} />
-
-      <div style={section}>
+      {/* 매장 자체를 규정하는 값들(이름/분류/주소)을 한 그룹으로. 아래 "브랜딩"(보이는 방식)과
+          구분된다 — 이전엔 이름·분류·컬러·로고·주소·소개가 한 줄기로 죽 나열돼 있어서
+          "바꿀 수 없는 사실"과 "취향껏 바꾸는 꾸밈"이 같은 무게로 보였다 (ADR-0009). */}
+      <SectionGroup title="매장 정보">
+      <div style={field}>
         <label style={label}>매장 이름</label>
         <div className="card-sm" style={{ padding: '12px 14px', fontSize: 14, fontWeight: 700 }}>{venue.name}</div>
-        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+        <p style={{ ...TYPE.caption, fontSize: 11, marginTop: 6 }}>
           등록 후에는 매장 이름을 바꿀 수 없어요. 오늘만 다르게 보이고 싶다면 위 영업 상태의 &quot;오늘 세션 이름&quot;을 바꿔주세요
         </p>
       </div>
 
-      <div style={section}>
+      <div style={field}>
         <label style={label}>분류</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {CATEGORIES.map(c => (
@@ -430,7 +450,18 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      <div style={section}>
+      <div style={field}>
+        <label style={label}>주소 (선택)</label>
+        <input className="input" value={address} onChange={e => setAddress(e.target.value)} placeholder="예: 서울 강남구 ..." />
+        <p style={{ ...TYPE.caption, fontSize: 11, marginTop: 6 }}>
+          저장하면 이 주소로 지도 위치가 자동 등록돼요. 위치가 등록돼야 손님 홈 지도에 매장이 보여요
+        </p>
+      </div>
+      </SectionGroup>
+
+      {/* 손님에게 "어떻게 보이는지"에만 관여하는 값들 */}
+      <SectionGroup title="브랜딩" description="손님 화면에 이 매장이 어떻게 보일지 정해요">
+      <div style={field}>
         <label style={label}>대표 컬러</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {PRESET_COLORS.map(c => (
@@ -443,55 +474,51 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      <div style={section}>
+      <div style={field}>
         <label style={label}>로고 이미지 URL (선택)</label>
         <input className="input" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..." />
       </div>
 
-      <div style={section}>
+      <div style={field}>
         <label style={label}>대표 이미지 URL (선택)</label>
         <input className="input" value={heroUrl} onChange={e => setHeroUrl(e.target.value)} placeholder="https://..." />
       </div>
 
-      <div style={section}>
-        <label style={label}>주소 (선택)</label>
-        <input className="input" value={address} onChange={e => setAddress(e.target.value)} placeholder="예: 서울 강남구 ..." />
-      </div>
-
       {/* 매장 소개 — 방 화면(손님)의 "소개" 블록에 그대로 노출된다 (Phase 9) */}
-      <div style={section}>
+      <div style={field}>
         <label style={label}>매장 소개 (선택)</label>
         <textarea className="input" value={description} onChange={e => setDescription(e.target.value.slice(0, 200))}
           rows={3} maxLength={200} placeholder="예: 육회가 맛있는 우리 동네 노포"
           style={{ resize: 'none' }} />
-        <p style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 6 }}>
+        <p style={{ ...TYPE.caption, fontSize: 11, marginTop: 6 }}>
           손님 방 화면의 “소개”에 표시돼요 ({description.length}/200)
         </p>
       </div>
+      </SectionGroup>
 
-      <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 24px' }} />
-
-      <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>리뷰 링크</p>
-      <p style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 16 }}>손님이 방을 나갈 때 리뷰 유도 버튼으로 노출됩니다</p>
-
-      <div style={section}>
+      {/* 리뷰 링크 3개는 같은 종류의 입력이라 한 그룹. 제목/설명은 SectionGroup이 그린다 —
+          이전엔 구분선 + 제목 + 설명을 손으로 그려서 다른 그룹들과 모양이 달랐다. */}
+      <SectionGroup title="리뷰 링크" description="손님이 방을 나갈 때 리뷰 유도 버튼으로 노출됩니다">
+      <div style={field}>
         <label style={label}>네이버 리뷰 URL</label>
         <input className="input" value={naverUrl} onChange={e => setNaverUrl(e.target.value)} placeholder="https://..." />
       </div>
 
-      <div style={section}>
+      <div style={field}>
         <label style={label}>구글 리뷰 URL (선택)</label>
         <input className="input" value={googleUrl} onChange={e => setGoogleUrl(e.target.value)} placeholder="https://..." />
       </div>
 
-      <div style={section}>
+      <div style={{ ...field, marginBottom: 0 }}>
         <label style={label}>카카오 리뷰 URL (선택)</label>
         <input className="input" value={kakaoUrl} onChange={e => setKakaoUrl(e.target.value)} placeholder="https://..." />
       </div>
+      </SectionGroup>
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
-        {saveError && <InlineMessage type="error" style={{ textAlign: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
-        {savedAt && <InlineMessage type="success" style={{ textAlign: 'center', marginBottom: 8 }}>✓ 저장되었습니다</InlineMessage>}
+        {saveError && <InlineMessage type="error" style={{ justifyContent: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
+        {geocodeWarning && <InlineMessage type="error" style={{ justifyContent: 'center', marginBottom: 8 }}>{geocodeWarning}</InlineMessage>}
+        {savedAt && !geocodeWarning && <InlineMessage type="success" style={{ justifyContent: 'center', marginBottom: 8 }}>저장되었습니다</InlineMessage>}
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}
           style={{ fontSize: 16, opacity: saving ? 0.5 : 1 }}>
           {saving ? '저장 중...' : '설정 저장'}

@@ -2,6 +2,8 @@
 
 import { ReactNode } from 'react'
 import { RankedVenue, RegionalRankings, VenueCategory } from '@/lib/supabase/types'
+import Icon, { IconName } from '@/components/Icon'
+import { GAP, ICON } from '@/lib/design'
 
 const CATEGORY_LABELS: Record<string, string> = {
   pocha: '포차', bar: '바', pub: '펍', wine_bar: '와인바', cafe: '카페', event_hall: '행사장', etc: '기타',
@@ -48,15 +50,25 @@ function RankCard({ venue, metric, onSelect }: { venue: RankedVenue; metric: str
   )
 }
 
-function RankRow({ title, venues, metricOf, onSelect }: {
+function RankRow({ title, titleIcon, venues, metricOf, onSelect }: {
   title: ReactNode
+  // 2026-08-17(ADR-0009): 제목 뒤에 붙던 이모지(🔥/⭐/❤️)를 Icon으로 교체. 이모지는 세
+  // 줄의 제목 높이를 서로 다르게 만들어(각 이모지의 실제 글리프 높이가 달라서) 나란한
+  // 섹션 제목들이 정렬돼 보이지 않았다.
+  titleIcon: IconName
   venues: RankedVenue[]
   metricOf: (v: RankedVenue) => string
   onSelect: (id: string) => void
 }) {
   return (
     <section style={{ marginBottom: 28 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 800, padding: '0 20px', marginBottom: 12 }}>{title}</h2>
+      <h2 style={{
+        fontSize: 20, fontWeight: 800, padding: '0 20px', marginBottom: GAP.base,
+        display: 'flex', alignItems: 'center', gap: GAP.snug,
+      }}>
+        {title}
+        <span style={{ color: 'var(--accent)', display: 'flex' }}><Icon name={titleIcon} size={ICON.row} /></span>
+      </h2>
       {venues.length === 0 ? (
         <p style={{ fontSize: 13, color: 'var(--muted2)', padding: '0 20px' }}>지금 이 지역에 활성화된 매장이 없어요</p>
       ) : (
@@ -78,23 +90,27 @@ export default function RegionRanking({ rankings, regionLabel, onSelectVenue }: 
 }) {
   return (
     <div>
-      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted2)', padding: '0 20px', marginBottom: 16 }}>
-        📍 {regionLabel}
+      <p style={{
+        fontSize: 13, fontWeight: 700, color: 'var(--muted2)', padding: '0 20px',
+        marginBottom: GAP.loose, display: 'flex', alignItems: 'center', gap: GAP.tight + 2,
+      }}>
+        <Icon name="location_on" size={ICON.inline} />
+        {regionLabel}
       </p>
       <RankRow
-        title={<>HOT TOP10 🔥</>}
+        title={<>HOT TOP10</>} titleIcon="local_fire_department"
         venues={rankings.hot}
         metricOf={v => `HOT ${Math.round((v.hot_score ?? 0) * 100)}`}
         onSelect={onSelectVenue}
       />
       <RankRow
-        title={<>실시간 별점 TOP10 ⭐</>}
+        title={<>실시간 별점 TOP10</>} titleIcon="star"
         venues={rankings.star}
         metricOf={v => `${(v.satisfaction ?? 0).toFixed(1)}`}
         onSelect={onSelectVenue}
       />
       <RankRow
-        title={<>헌팅 TOP10 ❤️</>}
+        title={<>헌팅 TOP10</>} titleIcon="favorite"
         venues={rankings.heart}
         metricOf={v => `${v.heart_count ?? 0}`}
         onSelect={onSelectVenue}

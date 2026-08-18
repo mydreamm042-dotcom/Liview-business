@@ -8,6 +8,8 @@ import BackButton from '@/components/BackButton'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
 import LoadingScreen from '@/components/LoadingScreen'
 import InlineMessage from '@/components/InlineMessage'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 const CATEGORIES: { value: VenueCategory; label: string }[] = [
   { value: 'pocha', label: '포차' },
@@ -118,7 +120,7 @@ export default function CreatePage() {
                     {v.name}
                     {v.category && <span style={{ fontSize: 11, color: 'var(--muted2)', marginLeft: 8, fontWeight: 400 }}>{CATEGORIES.find(c => c.value === v.category)?.label}</span>}
                   </span>
-                  <span style={{ color: 'var(--muted2)' }}>→</span>
+                  <Icon name="chevron_right" size={ICON.row} style={{ color: 'var(--muted)' }} />
                 </button>
               ))}
             </div>
@@ -158,7 +160,7 @@ export default function CreatePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {['한 번 등록하면 바뀌지 않는 고정 QR', '오늘 영업 시작/종료 버튼으로 매일 세션 관리', '입장 비밀번호 · 위치 반경 제한으로 QR 도용 방지', '마감 후에도 매장 이력 영구 보존'].map(t => (
               <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)' }}>
-                <span style={{ color: 'var(--accent)', fontSize: 16 }}>✓</span>{t}
+                <Icon name="check" size={ICON.inline} style={{ color: 'var(--accent)' }} />{t}
               </div>
             ))}
           </div>
@@ -167,7 +169,7 @@ export default function CreatePage() {
         {isAuthed && myVenues !== null && myVenues.length === 0 && (
           <button className="btn btn-primary" onClick={handleRegisterVenue} disabled={loading || !newVenueName.trim()}
             style={{ opacity: loading || !newVenueName.trim() ? 0.5 : 1, fontSize: 17 }}>
-            {loading ? '등록 중...' : '🏪 매장 등록하기'}
+            {loading ? '등록 중...' : <><Icon name="storefront" size={ICON.row} /> 매장 등록하기</>}
           </button>
         )}
       </div>

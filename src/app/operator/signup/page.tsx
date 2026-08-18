@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ensureOperatorProfile } from '@/lib/operatorProfile'
 import PageEyebrowHeader from '@/components/PageEyebrowHeader'
+import Icon from '@/components/Icon'
+import { GAP, ICON, SEMANTIC } from '@/lib/design'
 
 // 운영자 회원가입 (Operator 도메인, BUSINESS_RULES.md §2.11). 비밀번호 해시/이메일 인증은
 // Supabase Auth가 전담하고, 이 화면은 auth.signUp 호출 + operators 프로필 생성만 담당한다.
@@ -49,7 +51,9 @@ export default function OperatorSignupPage() {
   if (needsEmailConfirm) {
     return (
       <main className="flex flex-col min-h-dvh px-6 items-center justify-center" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>📧</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: GAP.loose, color: 'var(--accent)' }}>
+          <Icon name="mail" size={40} />
+        </div>
         <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>이메일을 확인해주세요</h1>
         <p style={{ fontSize: 14, color: 'var(--muted2)', marginBottom: 24 }}>{email}로 보낸 인증 메일의 링크를 눌러야 로그인할 수 있어요</p>
         <button className="btn btn-secondary" onClick={() => router.push('/operator/login')}>로그인 화면으로</button>

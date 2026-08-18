@@ -106,6 +106,12 @@ body {
   border-radius: 20px;
 }
 
+/* 공동 영역 안에서 항목을 나누는 선. 항목 "사이"에만 넣는다 — 마지막 항목 아래에도 선이
+   남으면 그룹 테두리와 1px 간격으로 겹쳐 두 줄처럼 보인다 (ADR-0009). */
+.nav-row-group > * + * {
+  border-top: 1px solid var(--border);
+}
+
 .card-sm {
   background: var(--card2);
   border: 1px solid var(--border);
@@ -117,6 +123,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 아이콘 + 글자 버튼의 간격. 호출부마다 gap을 따로 적으면 버튼마다 아이콘 거리가
+     달라지므로(유사성) 기본값을 여기서 정한다 (ADR-0009). */
+  gap: 6px;
   border-radius: 16px;
   font-weight: 700;
   font-size: 16px;
