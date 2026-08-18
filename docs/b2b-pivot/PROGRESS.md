@@ -277,3 +277,21 @@
   검증: 단위 테스트 8건 신규(비례/기본값/상하한/캔버스 비율 환산), tsc·vitest(196) 통과,
   Playwright로 운영자 편집 화면에서 네모 리사이즈 핸들을 끌자 좌석 지름이 36px→61px로
   **끄는 도중 실시간으로** 따라 변하는 것 확인
+- ⚠️ **발견 — 매장 등록해도 지도에 안 뜬다**: 사용자가 "사장님 매장 등록 시 지도에 매장이
+  표시되게 구현해"라고 요청 — 조사해보니 실제로 빠진 기능이었다. `BUSINESS_RULES.md`
+  §2.6에 이미 "위경도가 등록된 Venue만 지도 대상"이라고 명시돼 있고 `get_live_hot_venues`
+  RPC도 `latitude`/`longitude IS NOT NULL`을 요구하는데, 정작 그 값을 채울 방법이 어디에도
+  없었다 — 매장 등록 API(`POST /api/venues`)는 `name`/`category`/`address`만 저장하고,
+  운영자 설정 화면에도 위경도 입력 UI가 없었다(`PATCH /api/venues/[id]`는 `latitude`/
+  `longitude`를 이미 화이트리스트에 포함하고 있었지만 아무도 호출하지 않음). 즉 위치 등록은
+  문서에는 "선택 사항"으로 남아있지만 실제로는 등록할 방법 자체가 없었던 것
+- ✅ **위 문제 해결 — 주소 자동 지오코딩으로 위경도 채움** (`feature/매장-지도-위치-자동등록`):
+  구현 방식은 세 가지(현재 위치 버튼 / 주소 자동 변환 / 둘 다) 중 사용자가 "주소 자동
+  변환(지오코딩)"을 선택. 카카오맵 JS SDK가 이미 `libraries=services`로 로드돼 있어 별도
+  REST API 키 없이 `kakao.maps.services.Geocoder`로 처리 가능. `src/hooks/useKakaoMap.ts`에
+  `geocodeAddress(address)` 함수 신설, 운영자 설정 화면(`/operator/settings/[id]`)의
+  `handleSave`에서 주소가 있으면 저장 직전 지오코딩해 `latitude`/`longitude`를 함께
+  PATCH — 주소를 지우면 위치도 같이 비우고, 지오코딩 실패(주소가 애매한 경우 등) 시엔
+  기존 위치를 그대로 둔 채 경고만 보여주고 나머지 설정 저장은 막지 않는다. tsc/vitest(188)
+  통과, Playwright로 카카오 SDK를 모킹해 성공/실패 두 경로 모두 확인(성공 시 PATCH 페이로드에
+  위경도 포함, 실패 시 경고 노출+나머지 필드 정상 저장)

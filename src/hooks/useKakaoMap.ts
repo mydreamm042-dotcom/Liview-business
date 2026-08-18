@@ -38,6 +38,12 @@ declare global {
               options?: { x?: number; y?: number; radius?: number; size?: number },
             ) => void
           }
+          Geocoder: new () => {
+            addressSearch: (
+              address: string,
+              callback: (result: { address_name: string; x: string; y: string }[], status: string) => void,
+            ) => void
+          }
           Status: { OK: string; ZERO_RESULT: string; ERROR: string }
         }
       }
@@ -99,6 +105,32 @@ export function useKakaoMapSdk() {
 export interface GeoPosition {
   lat: number
   lng: number
+}
+
+// 주소 문자열 → 좌표. 운영자가 매장 설정에서 주소를 저장할 때 위경도를 함께 채워
+// Discovery 지도에 노출시키는 데 쓴다(BUSINESS_RULES.md §2.6 "위치(위경도)가 등록된
+// Venue만 지도 대상"). 별도 REST API 키 없이 이미 로드하는 JS SDK의 services
+// 라이브러리로 처리한다. 찾을 수 없거나 SDK 로드에 실패하면 null — 호출부가 이를
+// "위치는 못 찾았지만 나머지 설정은 저장"으로 처리해야지, 저장 자체를 막으면 안 된다.
+export async function geocodeAddress(address: string): Promise<GeoPosition | null> {
+  const trimmed = address.trim()
+  if (!trimmed) return null
+
+  try {
+    await loadKakaoSdk()
+  } catch {
+    return null
+  }
+
+  return new Promise(resolve => {
+    new window.kakao.maps.services.Geocoder().addressSearch(trimmed, (result, status) => {
+      if (status === window.kakao.maps.services.Status.OK && result[0]) {
+        resolve({ lat: Number(result[0].y), lng: Number(result[0].x) })
+      } else {
+        resolve(null)
+      }
+    })
+  })
 }
 
 // 참여자 위치 권한 요청. 거부/실패 시에도 화면이 멈추지 않도록 상태를 명확히 구분한다.
