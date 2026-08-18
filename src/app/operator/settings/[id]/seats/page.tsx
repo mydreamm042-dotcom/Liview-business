@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, use, PointerEvent as ReactPoi
 import { useRouter } from 'next/navigation'
 import { LayoutItemKind, VenueLayoutItem, VenueSeat } from '@/lib/supabase/types'
 import { shapeStyle, labelStyle, lineStyle, LINE_THICKNESS_PX } from '@/components/LayoutItemShape'
-import { SEAT_SIZE_PCT } from '@/components/SeatMap'
+import { seatSizePx } from '@/lib/seatSize'
 import CanvasMiniMap, { miniMapHeight } from '@/components/CanvasMiniMap'
 import { useZoomPan } from '@/hooks/useZoomPan'
 import { nextDuplicateLabel } from '@/lib/seatLabel'
@@ -348,7 +348,9 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
 
   const selectedItem = selection?.type === 'item' ? items.find(i => i.id === selection.id) : undefined
   const selectedSeat = selection?.type === 'seat' ? seats.find(s => s.id === selection.id) : undefined
-  const seatPx = contentWidth > 0 ? (contentWidth * SEAT_SIZE_PCT) / 100 : 32
+  // 네모를 늘리거나 줄이는 즉시 좌석 크기도 따라 바뀐다 — items가 로컬 상태라 드래그 중에도
+  // 실시간으로 반영된다 (ADR-0008 "박스 비례 fit").
+  const seatPx = seatSizePx(items, contentWidth, contentHeight)
 
   return (
     <main className="flex flex-col min-h-dvh px-6" style={{ paddingTop: 56, paddingBottom: 60 }}>
@@ -405,7 +407,7 @@ export default function OperatorSeatsPage({ params }: { params: Promise<{ id: st
           <div ref={contentRef} style={{ position: 'relative', width: contentWidth || '100%', height: contentHeight || '100%' }}>
             {seats.length === 0 && items.length === 0 && (
               <p style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--muted2)' }}>
-                위 버튼으로 좌석과 테이블을 추가해보세요
+                위 버튼으로 좌석과 네모를 추가해보세요
               </p>
             )}
 

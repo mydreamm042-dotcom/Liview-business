@@ -53,7 +53,9 @@
 | 좌석/배치 요소 좌표계 | 캔버스 대비 0~100% (`position_x`/`position_y` = 중심) | `venue_seats`, `venue_layout_items` 공통 |
 | 배치 요소 최소/최대 크기 | ~~4%(`MIN_SIZE_PCT`)~~ **제한 폐지 완료** (2026-08-12, ADR-0008). 0 이하만 무시 | `src/app/api/venues/[id]/layout/route.ts` (`sanitizeSize`) |
 | 배치 요소 기본 크기 (%) | box 24×22 · door 18×6 · text 20×6 · line 40(길이) — ~~table 26×16~~은 폐지 | `src/app/api/venues/[id]/layout/route.ts` |
-| **좌석 고정 렌더링 크기** (2026-08-12, ADR-0008) | **캔버스 너비의 8%** (`SEAT_SIZE_PCT`). 폐지된 `table`(26×16%)의 짧은 변 16%의 절반 — 테이블 하나에 좌석이 여러 개 붙는 실제 배치를 기준으로 잡았다. 390px 캔버스에서 약 31px로, 기존 하드코딩(38px)과 비슷하다. **px가 아니라 %인 이유**: 확대하면 콘텐츠가 실제로 커지는 구조라 px로 두면 좌석만 안 커져 배치가 어긋난다 | `src/components/SeatMap.tsx` |
+| **좌석 렌더링 크기 — 네모 비례 fit** (2026-08-13 정정 반영, ADR-0008) | 고정 상수가 아니라 그 매장 `box` 평균에서 매번 계산하는 파생값. **좌석 지름 = 평균 box의 짧은 변 × 0.4** (`SEAT_TO_BOX_RATIO`). 짧은 변 기준인 이유는 좌석이 어느 방향으로 놓여도 안 넘치게, 0.4인 이유는 네모 한 변에 두 자리가 나란히 들어가고 사이 간격도 남기 때문. 캔버스가 정사각형이 아니라 width%/height%를 px로 환산한 뒤 비교한다 | `src/lib/seatSize.ts` (`seatSizePx`) |
+| 좌석 크기 — 네모 0개일 때 기본값 | 캔버스 너비의 **8%** (`SEAT_FALLBACK_PCT`) — 비례 도입 전 쓰던 고정값과 같아서, 네모 없이 좌석만 배치해둔 기존 매장은 배치가 그대로 유지된다 | `src/lib/seatSize.ts` |
+| 좌석 크기 — 상·하한 | 캔버스 **짧은 변의 3%~16%** (`SEAT_MIN_PCT`/`SEAT_MAX_PCT`). 네모 크기 제한을 폐지해서 평균이 극단으로 갈 수 있는데, 너무 작으면 못 누르고 너무 크면 배치도를 덮는다. 긴 변이 아니라 짧은 변 기준인 이유: 가로로 긴 캔버스에서 하한이 비례값보다 커져 비례 자체를 덮어버린다 | `src/lib/seatSize.ts` |
 | 선(line) 두께 | 2px 고정 (`LINE_THICKNESS_PX`) — 저장값이 아니라 렌더링 상수. 확대해도 굵어지지 않아야 구역 구분선으로 읽힌다 | `src/components/LayoutItemShape.tsx` |
 | **자리배치도 확대 배율 범위** (2026-08-12, ADR-0008) | 1.0~4.0배, 연속값 (`ZOOM_MIN`/`ZOOM_MAX`) — 버튼 없이 두 손가락 핀치 / 트랙패드 Ctrl+휠로만 조작 | `src/hooks/useZoomPan.ts` |
 | 드래그/탭 구분 임계값 | 6px (`DRAG_THRESHOLD_PX`) — 이보다 적게 움직였으면 화면 이동이 아니라 탭으로 본다 | `src/hooks/useZoomPan.ts` |

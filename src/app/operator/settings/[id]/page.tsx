@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { getSessionToken, storeRoomData } from '@/lib/session'
+import { geocodeAddress } from '@/hooks/useKakaoMap'
 import { Venue, VenueCategory } from '@/lib/supabase/types'
 import BackButton from '@/components/BackButton'
 import LoadingScreen from '@/components/LoadingScreen'
@@ -45,6 +46,7 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [saveError, setSaveError] = useState('')
+  const [geocodeWarning, setGeocodeWarning] = useState('')
 
   // 편집 필드 — 매장 이름(name)은 편집 대상이 아니다 (BUSINESS_RULES.md §2.2 "매장명 변경
   // 금지" — 등록 후 고정, 향후 매장 실재 검증의 판정 근거가 된다). 세션(오늘 영업) 이름은
@@ -197,31 +199,53 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
 
   const handleSave = async () => {
     setSaveError('')
+    setGeocodeWarning('')
     if (passwordEnabled && !password.trim()) {
       setSaveError('입장 비밀번호를 켰다면 비밀번호를 입력해주세요')
       return
     }
     setSaving(true)
     try {
+      const trimmedAddress = address.trim()
+      const payload: Record<string, unknown> = {
+        category,
+        address: trimmedAddress || null,
+        logo_url: logoUrl.trim() || null,
+        hero_image_url: heroUrl.trim() || null,
+        description: description.trim() || null,
+        primary_color: primaryColor,
+        naver_review_url: naverUrl.trim() || null,
+        google_review_url: googleUrl.trim() || null,
+        kakao_review_url: kakaoUrl.trim() || null,
+        join_password_enabled: passwordEnabled,
+        join_password: passwordEnabled ? password.trim() : null,
+      }
+
+      // 주소를 지도 위치(위경도)로 자동 변환해 함께 저장한다 — 위경도가 등록된 매장만
+      // 지도 대상이기 때문(BUSINESS_RULES.md §2.6). 주소를 지우면 위치도 같이 비우고,
+      // 지오코딩에 실패하면(주소가 애매한 경우 등) 기존 위치는 건드리지 않은 채 경고만
+      // 보여준다 — 위치를 못 찾았다고 나머지 설정 저장까지 막을 이유는 없다.
+      if (!trimmedAddress) {
+        payload.latitude = null
+        payload.longitude = null
+      } else {
+        const coords = await geocodeAddress(trimmedAddress)
+        if (coords) {
+          payload.latitude = coords.lat
+          payload.longitude = coords.lng
+        } else {
+          setGeocodeWarning('주소로 지도 위치를 찾지 못했어요. 더 구체적으로 입력해보세요 — 나머지 설정은 저장됐어요')
+        }
+      }
+
       const res = await fetch(`/api/venues/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category,
-          address: address.trim() || null,
-          logo_url: logoUrl.trim() || null,
-          hero_image_url: heroUrl.trim() || null,
-          description: description.trim() || null,
-          primary_color: primaryColor,
-          naver_review_url: naverUrl.trim() || null,
-          google_review_url: googleUrl.trim() || null,
-          kakao_review_url: kakaoUrl.trim() || null,
-          join_password_enabled: passwordEnabled,
-          join_password: passwordEnabled ? password.trim() : null,
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setVenue(data.venue)
       setSavedAt(Date.now())
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : '저장에 실패했습니다')
@@ -429,6 +453,9 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
       <div style={field}>
         <label style={label}>주소 (선택)</label>
         <input className="input" value={address} onChange={e => setAddress(e.target.value)} placeholder="예: 서울 강남구 ..." />
+        <p style={{ ...TYPE.caption, fontSize: 11, marginTop: 6 }}>
+          저장하면 이 주소로 지도 위치가 자동 등록돼요. 위치가 등록돼야 손님 홈 지도에 매장이 보여요
+        </p>
       </div>
       </SectionGroup>
 
@@ -490,7 +517,8 @@ export default function OperatorSettingsPage({ params }: { params: Promise<{ id:
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 448, padding: '16px 20px 32px', background: 'linear-gradient(0deg,var(--bg) 60%,transparent)' }}>
         {saveError && <InlineMessage type="error" style={{ justifyContent: 'center', marginBottom: 8 }}>{saveError}</InlineMessage>}
-        {savedAt && <InlineMessage type="success" style={{ justifyContent: 'center', marginBottom: 8 }}>저장되었습니다</InlineMessage>}
+        {geocodeWarning && <InlineMessage type="error" style={{ justifyContent: 'center', marginBottom: 8 }}>{geocodeWarning}</InlineMessage>}
+        {savedAt && !geocodeWarning && <InlineMessage type="success" style={{ justifyContent: 'center', marginBottom: 8 }}>저장되었습니다</InlineMessage>}
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}
           style={{ fontSize: 16, opacity: saving ? 0.5 : 1 }}>
           {saving ? '저장 중...' : '설정 저장'}
